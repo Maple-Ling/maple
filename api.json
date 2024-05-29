@@ -38,6 +38,26 @@
             "changeable": 1
         },
         {
+            "key": "奈飞中文",
+            "name": "奈飞中文┃凌枫",
+            "type": 3,
+            "api": "csp_XBPQ",
+            "searchable": 1,
+            "quickSearch": 1,
+            "filterable": 1,
+            "ext": "./json/奈飞中文.json"
+        },
+        {
+            "key": "ya奈飞",
+            "name": "ya奈飞┃凌枫",
+            "type": 3,
+            "api": "csp_XBPQ",
+            "searchable": 1,
+            "quickSearch": 1,
+            "filterable": 1,
+            "ext": "./json/ya奈飞.json"
+        },
+        {
             "key": "厂长",
             "name": "厂长┃凌枫",
             "type": 3,
