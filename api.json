@@ -90,6 +90,36 @@
             "ext": "./json/348影视.json"
         },
         {
+            "key": "片库",
+            "name": "片库┃凌枫",
+            "type": 3,
+            "api": "csp_XBPQ",
+            "searchable": 1,
+            "quickSearch": 1,
+            "filterable": 1,
+            "ext": "./json/片库.json"
+        },
+        {
+            "key": "片库备",
+            "name": "片库备┃凌枫",
+            "type": 3,
+            "api": "csp_XBPQ",
+            "searchable": 1,
+            "quickSearch": 1,
+            "filterable": 1,
+            "ext": "./json/片库备.json"
+        },
+        {
+            "key": "白嫖者联盟",
+            "name": "白嫖者联盟┃凌枫",
+            "type": 3,
+            "api": "csp_XBPQ",
+            "searchable": 1,
+            "quickSearch": 1,
+            "filterable": 1,
+            "ext": "./json/白嫖者联盟.json"
+        },
+        {
             "key": "csp_55影视",
             "name": "55影视┃凌枫",
             "type": 3,
