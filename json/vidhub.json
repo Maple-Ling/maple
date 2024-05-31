@@ -1,0 +1,5 @@
+{
+  "主页url": "http://vidhub1.cc/",
+  "分类url": "http://vidhub1.cc/vodtype/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html",
+  "分类": "电影$1#电视剧$2#综艺$3#动漫$4"
+}

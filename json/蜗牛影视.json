@@ -1,0 +1,5 @@
+{
+  "主页url": "https://www.wniutv.com/",
+  "分类url": "https://www.wniutv.com/wnys/show/area/{area}/by/{by}/id/{cateId}/page/{catePg}/year/{year}.html",
+  "分类": "电影$dianying#电视剧$dianshiju#综艺$zongyi#动漫$dongmna#日韩剧$rhj"
+}
