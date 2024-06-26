@@ -1,0 +1,8 @@
+{
+  "主页url": "https://www.kmeiju.cc",
+  "分类url": "https://www.kmeiju.cc/{cateId}",
+  "分类": "电影$movie_kmeiju#电视剧$tv_kmeiju#动漫$fan_kmeiju",
+  "播放数组": "<div class=\"paly_list_btn\">&&</div>",
+  "选集标题": ">&&</a>",
+  "选集链接": "href=\"&&\""
+}

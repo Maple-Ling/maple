@@ -1,0 +1,10 @@
+{
+  "主页url": "https://lkvod.us",
+  "分类链接": "https://lkvod.us/show/{cateId}-{area}--{class}-----{catePg}---{year}.html",
+  "分类名称": "电影&电视剧&动漫",
+  "分类名称替换词": "1&2&4",
+  "线路标题": "",
+  "线路数组": "",
+  "搜索链接": "https://lkvod.us/nk/-------------.html?wd={wd}&submit=搜 索",
+  "POST请求数据": "wd={wd}&search="
+}
