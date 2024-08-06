@@ -1,0 +1,9 @@
+{
+  "主页url": "https://netfly.one",
+  "数组": "",
+  "图片": "",
+  "线路数组": "module-tab-item tab-item&&</small>",
+  "线路标题": "<span>&&</span>",
+  "分类url": "https://netfly.one/vod/show/{cateId}-{area}--{class}-----{catePg}---{year}.html",
+  "分类": "电影$1#电视剧$2#动漫$4"
+}

@@ -1,0 +1,8 @@
+{
+  "主页url": "https://www.6080yy4.com",
+  "分类url": "https://www.6080yy4.com/vodtype/area/{area}/{cateId}/page/{catePg}/class/{class}/year/{year}.html",
+  "分类": "电影$1#电视剧$2#综艺$3#动漫$4",
+  "搜索请求头参数": "User-Agent$MOBILE_UA",
+  "搜索链接": "https://6080yy4.com/vod-s/-------------.html?wd={wd}",
+  "POST请求数据": "wd={wd}&search="
+}

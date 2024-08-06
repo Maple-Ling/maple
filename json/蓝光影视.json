@@ -1,0 +1,32 @@
+{
+  "主页url": "https://sosexxx.com",
+  
+  "分类": "最新电影&国产剧&海外剧&动漫",
+  "分类值": "1&2&3&4",
+  
+  "分类url": "https://sosexxx.com/index.php/vod/show/by/time/id//area/{area}/{cateId}/page/{catePg}/class/{class}/year/{year}.html",
+  
+  "数组": "",
+  "图片": "",
+  "标题": "",
+  "副标题": "<p class=\"item-status text-overflow\">&&</p>",
+  "链接": "",
+  "链接前缀": "",
+  
+  "搜索模式": "0",
+  "搜索后缀": "",
+  
+  "影片年代": "年份：&&</p>",
+  "影片地区": "地区：&&/",
+  "影片类型": "类型：&&/",
+  "导演": "导演：&&</p>",
+  "主演": "主演：&&</p>",
+  "简介": "",
+  
+  "线路数组": "",
+  "线路标题": "<li class=\"swiper-slide ewave-tab active\" data-target=\"#ewave-playlist-1\">&&</li>",
+  
+  "播放数组": "<ul class=\"row&&</ul>",
+  "播放标题": "html\">&&</a>"
+
+}

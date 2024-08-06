@@ -1,0 +1,7 @@
+{
+  "主页url": "https://www.kmeiju.cc",
+  "分类url": "https://www.kmeiju.cc/Type/{cateId}.html",
+  "分类": "电影$1#电视剧$2#动漫$4",
+  "播放数组": "",
+  "播放标题": "title=\"&&\""
+}
