@@ -5,26 +5,22 @@
       "name": "live",
       "type": 0,
       "url": "./lives/live.txt",
-      "epg": "http://epg.112114.eu.org/?ch={name}&date={date}"
+      "epg": "./1.jpg"
     }
   ],
   "sites": [
     {
-      "key": "玩偶",
+      "key": "玩偶哥哥",
       "name": "🤓玩偶哥哥🤔☞凌枫☘",
       "type": 3,
       "api": "csp_WoGG",
-      "timeout": 15,
-      "playerType": 2,
       "searchable": 1,
       "quickSearch": 1,
-      "filterable": 1,
       "changeable": 0,
       "ext": {
-        "aliToken": "tvfan/token.txt",
-        "quarkCookie": "tvfan/cookie.txt",
-        "from": "4k|auto|fhd",
-        "siteUrl": "https://www.wogg.link/",
+        "Cloud-drive": "tvfan/Cloud-drive.txt",
+        "from": "4k|auto",
+        "siteUrl": "https://www.wogg.net/",
         "danMu": "弹"
       }
     },
@@ -55,8 +51,8 @@
       "ext": "./json/最新4K.json"
     },
     {
-      "key": "wo4k",
-      "name": "🤓wo4k🤔☞凌枫☘",
+      "key": "蓝光影视",
+      "name": "🤓蓝光影视🤔☞凌枫☘",
       "type": 3,
       "api": "csp_XBPQ",
       "timeout": 15,
@@ -65,11 +61,76 @@
       "quickSearch": 1,
       "filterable": 1,
       "changeable": 0,
-      "ext": "./json/wo4K.json"
+      "ext": "./json/蓝光影视.json"
     },
     {
-      "key": "4K影视1080",
-      "name": "🤓4K影视1080🤔☞凌枫☘",
+      "key": "落攻阎影视",
+      "name": "🤓落攻阎影视🤔☞凌枫☘",
+      "type": 3,
+      "api": "csp_XBPQ",
+      "timeout": 15,
+      "playerType": 2,
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 1,
+      "changeable": 1,
+      "ext": "./json/落攻阎影视.json"
+    },
+    {
+      "key": "风车动漫",
+      "name": "🤓风车动漫🤔☞凌枫☘",
+      "type": 3,
+      "api": "csp_XBPQ",
+      "timeout": 15,
+      "playerType": 2,
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 1,
+      "changeable": 1,
+      "ext": "./json/风车动漫.json"
+    },
+    {
+      "key": "糖豆影视",
+      "name": "🤓糖豆影视🤔☞凌枫☘",
+      "type": 3,
+      "api": "csp_XBPQ",
+      "timeout": 15,
+      "playerType": 2,
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 1,
+      "changeable": 1,
+      "ext": "./json/糖豆影视.json"
+    },
+    {
+      "key": "海外汇剧",
+      "name": "🤓海外汇剧🤔☞凌枫☘",
+      "type": 3,
+      "api": "csp_XBPQ",
+      "timeout": 15,
+      "playerType": 2,
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 1,
+      "changeable": 1,
+      "ext": "./json/海外汇剧.json"
+    },
+    {
+      "key": "短剧天堂",
+      "name": "🤓短剧天堂🤔☞凌枫☘",
+      "type": 3,
+      "api": "csp_XBPQ",
+      "timeout": 15,
+      "playerType": 2,
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 1,
+      "changeable": 1,
+      "ext": "./json/短剧天堂.json"
+    },
+    {
+      "key": "奈飞中文",
+      "name": "🤓奈飞中文🤔☞凌枫☘",
       "type": 3,
       "api": "csp_XBPQ",
       "timeout": 15,
@@ -78,7 +139,59 @@
       "quickSearch": 1,
       "filterable": 1,
       "changeable": 0,
-      "ext": "./json/4K影视1080.json"
+      "ext": "./json/奈飞中文.json"
+    },
+    {
+      "key": "厂长影视",
+      "name": "🤓厂长影视🤔☞凌枫☘",
+      "type": 3,
+      "api": "csp_XBPQ",
+      "timeout": 15,
+      "playerType": 2,
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 1,
+      "changeable": 0,
+      "ext": "./json/厂长影视.json"
+    },
+    {
+      "key": "vidhub",
+      "name": "🤓vidhub🤔☞凌枫☘",
+      "type": 3,
+      "api": "csp_XBPQ",
+      "timeout": 15,
+      "playerType": 2,
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 1,
+      "changeable": 0,
+      "ext": "./json/vidhub.json"
+    },
+    {
+      "key": "皮皮虾",
+      "name": "🤓皮皮虾🤔☞凌枫☘",
+      "type": 3,
+      "api": "csp_XBPQ",
+      "timeout": 15,
+      "playerType": 2,
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 1,
+      "changeable": 0,
+      "ext": "./json/皮皮虾.json"
+    },
+    {
+      "key": "爱宝片",
+      "name": "🤓爱宝片🤔☞凌枫☘",
+      "type": 3,
+      "api": "csp_XBPQ",
+      "timeout": 15,
+      "playerType": 2,
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 1,
+      "changeable": 0,
+      "ext": "./json/爱宝片.json"
     },
     {
       "key": "爱看影院",
@@ -90,7 +203,7 @@
       "searchable": 1,
       "quickSearch": 1,
       "filterable": 1,
-      "changeable": 0,
+      "changeable": 1,
       "ext": "./json/爱看影院.json"
     },
     {
@@ -118,19 +231,6 @@
       "filterable": 1,
       "changeable": 0,
       "ext": "./json/剧圈圈.json"
-    },
-    {
-      "key": "喵物次元",
-      "name": "🤓喵物次元🤔☞凌枫☘",
-      "type": 3,
-      "api": "csp_XBPQ",
-      "timeout": 15,
-      "playerType": 2,
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "changeable": 0,
-      "ext": "./json/喵物次元.json"
     },
     {
       "key": "来看点播",
@@ -185,8 +285,8 @@
       "ext": "./json/毒舌影视.json"
     },
     {
-      "key": "美剧星球",
-      "name": "🤓美剧星球🤔☞凌枫☘",
+      "key": "看美剧影视",
+      "name": "🤓看美剧影视🤔☞凌枫☘",
       "type": 3,
       "api": "csp_XBPQ",
       "timeout": 15,
@@ -195,7 +295,7 @@
       "quickSearch": 1,
       "filterable": 1,
       "changeable": 0,
-      "ext": "./json/美剧星球.json"
+      "ext": "./json/看美剧影视.json"
     },
     {
       "key": "新视觉影视",
@@ -222,30 +322,6 @@
       "filterable": 1,
       "changeable": 0,
       "ext": "./json/看戏影视.json"
-    },
-    {
-      "key": "csp_Ddrk",
-      "name": "🤓低端影视🤔☞凌枫☘",
-      "type": 3,
-      "api": "csp_Ddrk",
-      "timeout": 15,
-      "playerType": 2,
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "changeable": 0
-    },
-    {
-      "key": "csp_Kkys",
-      "name": "🤓酷看影视🤔☞凌枫☘",
-      "type": 3,
-      "api": "csp_Kkys",
-      "timeout": 15,
-      "playerType": 2,
-      "searchable": 1,
-      "quickSearch": 1,
-      "filterable": 1,
-      "changeable": 0
     },
     {
       "key": "韩剧tv",
@@ -646,4 +722,4 @@
     "cms.qdwght.com",
     "api.htpan.net"
   ]
-    }
+}
