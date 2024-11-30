@@ -1,7 +1,9 @@
 #!/bin/bash
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
+# 定义颜色代码
+RED='\033[1;31m'
+GREEN='\033[1;32m'
+YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # 创建快捷命令 m
@@ -16,6 +18,7 @@ menu() {
     echo "(1) 节点搭建"
     echo "(2) WARP工具"
     echo "(0) 返回"
+    echo "(99) 退出工具箱"
     read -p "请输入选项: " choice
     case $choice in
         1)
@@ -26,6 +29,10 @@ menu() {
             ;;
         0)
             return
+            ;;
+        99)
+            echo -e "${RED}退出工具箱${NC}"
+            exit 0
             ;;
         *)
             echo "无效的选项，请重新输入！"
@@ -39,7 +46,8 @@ node_setup_tools() {
     echo "节点搭建工具:"
     echo "1) Hysteria2 安装脚本"
     echo "2) Sing-box 安装脚本"
-    echo "(0) 返回"
+    echo "(0) 返回上一级"
+    echo "(99) 退出工具箱"
     read -p "请输入选项: " tool_choice
     case $tool_choice in
         1)
@@ -53,6 +61,10 @@ node_setup_tools() {
         0)
             menu
             ;;
+        99)
+            echo -e "${RED}退出工具箱${NC}"
+            exit 0
+            ;;
         *)
             echo "无效的选项，请重新输入！"
             sleep 2
@@ -64,7 +76,8 @@ node_setup_tools() {
 warp_tools() {
     echo "WARP工具:"
     echo "1) WARP 安装脚本"
-    echo "(0) 返回"
+    echo "(0) 返回上一级"
+    echo "(99) 退出工具箱"
     read -p "请输入选项: " tool_choice
     case $tool_choice in
         1)
@@ -73,6 +86,10 @@ warp_tools() {
             ;;
         0)
             menu
+            ;;
+        99)
+            echo -e "${RED}退出工具箱${NC}"
+            exit 0
             ;;
         *)
             echo "无效的选项，请重新输入！"
