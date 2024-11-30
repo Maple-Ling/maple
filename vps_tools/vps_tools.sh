@@ -39,8 +39,8 @@ show_menu() {
 
     # 输出左侧菜单与右侧菜单对齐
     printf "%-45s %-45s\n" "左侧菜单:" "右侧菜单:"
-    printf "%-45s %-45s\n" "$(printf "(%-3s)" 1) 节点搭建" "$(printf "(%-3s)" 2) WARP 工具"
-    printf "%-45s %-45s\n" "$(printf "(%-3s)" 0) 返回上一级" "$(printf "(%-3s)" 99) 退出工具箱"
+    printf "%-45s %-45s\n" "$(printf "(%-2s)" 1) 节点搭建" "$(printf "(%-2s)" 2) WARP 工具"
+    printf "%-45s %-45s\n" "$(printf "(%-2s)" 0) 返回上一级" "$(printf "(%-2s)" 99) 退出工具箱"
 
     echo
 
@@ -58,9 +58,9 @@ show_menu() {
 node_setup_tools() {
     clear
     echo -e "${PINK}节点搭建工具:${NC}"
-    echo "  $(printf "(%-3s)" 1) Hysteria2 安装脚本"
-    echo "  $(printf "(%-3s)" 2) Sing-box 安装脚本"
-    echo "  $(printf "(%-3s)" 0) 返回上一级"
+    echo "  $(printf "(%-2s)" 1) Hysteria2 安装脚本"
+    echo "  $(printf "(%-2s)" 2) Sing-box 安装脚本"
+    echo "  $(printf "(%-2s)" 0) 返回上一级"
 
     read -p "请输入选项: " tool_choice
     case $tool_choice in
@@ -75,8 +75,8 @@ node_setup_tools() {
 warp_tools() {
     clear
     echo -e "${PINK}WARP 工具:${NC}"
-    echo "  $(printf "(%-3s)" 1) WARP 安装脚本"
-    echo "  $(printf "(%-3s)" 0) 返回上一级"
+    echo "  $(printf "(%-2s)" 1) WARP 安装脚本"
+    echo "  $(printf "(%-2s)" 0) 返回上一级"
 
     read -p "请输入选项: " tool_choice
     case $tool_choice in
