@@ -37,13 +37,12 @@ echo ""
 # 菜单函数和其他函数
 
 menu() {
-    echo "请选择一个分类:"
+    echo -e "${NC}请选择一个分类:${NC}"
 
-    echo "(1) 节点搭建"
+    printf "%-10s" "(1) 节点搭建"
+    printf "%-10s" "(2) WARP工具"
 
-    echo "(2) WARP工具"
-
-    echo "(0) 返回"
+    echo -e "(0) 返回\n(99) 退出工具箱"
 
     read -p "请输入选项: " choice
     case $choice in
