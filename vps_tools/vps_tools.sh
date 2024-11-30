@@ -19,22 +19,7 @@ setup_alias() {
     fi
 }
 
-# 获取远程文件的哈希值
-get_remote_hash() {
-    wget -q -O - "$VPS_TOOLS_URL" | sha256sum | cut -d ' ' -f 1
-}
-
-# 获取本地文件的哈希值
-get_local_hash() {
-    if [ -f "$VPS_TOOLS_FILE" ]; then
-        sha256sum "$VPS_TOOLS_FILE" | cut -d ' ' -f 1
-    else
-        echo ""
-    fi
-}
-
-
-# 更新脚本文件
+# 下载并执行最新的 vps_tools.sh 脚本
 update_script() {
     echo -e "${PINK}正在更新脚本文件...${NC}"
     wget -q -O "$VPS_TOOLS_FILE" "$VPS_TOOLS_URL" && chmod +x "$VPS_TOOLS_FILE"
@@ -111,5 +96,4 @@ download_and_run() {
 
 # 初始化并显示菜单
 setup_alias
-download_vps_tools  # 下载并替换 vps_tools.sh
 show_menu
