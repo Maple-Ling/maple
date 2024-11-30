@@ -26,6 +26,19 @@ setup_alias() {
     fi
 }
 
+# 添加开机自启（仅执行一次）
+setup_autostart() {
+    local startup_command="bash ${BASH_SOURCE[0]} &"
+    
+    # 检查是否已经添加了开机自启
+    if ! grep -Fxq "$startup_command" /etc/rc.local; then
+        echo "$startup_command" >> /etc/rc.local
+        echo -e "已成功添加脚本到开机自启项。"
+    else
+        echo -e "开机自启项已存在，无需重复添加。"
+    fi
+}
+
 # 下载并检查文件是否已存在
 download_or_replace_script() {
     echo -e "正在检查脚本文件..."
@@ -42,12 +55,15 @@ download_or_replace_script() {
 # 主菜单
 show_menu() {
     clear
-    echo -e "\e[1;35m            Maple工具箱            \e[0m"
-    echo "-------------------------------------------------------------"
+    echo "                Maple工具箱                "
+    echo "---------------------------------------------"
+    echo ""
     echo "1  节点搭建"
+    echo ""
     echo "2  WARP 工具"
+    echo ""
     echo "0  退出工具箱"
-    echo
+    echo ""
 
     read -p "请输入选项: " choice
     case $choice in
@@ -61,10 +77,14 @@ show_menu() {
 # 节点搭建工具
 node_setup_tools() {
     clear
-    echo -e "节点搭建工具:"
+    echo "节点搭建工具:"
+    echo ""
     echo "1  Hysteria2 安装脚本"
+    echo ""
     echo "2  Sing-box 安装脚本"
+    echo ""
     echo "0  返回上一级"
+    echo ""
 
     read -p "请输入选项: " tool_choice
     case $tool_choice in
@@ -78,9 +98,12 @@ node_setup_tools() {
 # WARP 工具
 warp_tools() {
     clear
-    echo -e "WARP 工具:"
+    echo "WARP 工具:"
+    echo ""
     echo "1  WARP 安装脚本"
+    echo ""
     echo "0  返回上一级"
+    echo ""
 
     read -p "请输入选项: " tool_choice
     case $tool_choice in
@@ -94,8 +117,8 @@ warp_tools() {
 download_and_run() {
     local url=$1
     local filename=$(basename "$url")
-    echo -e "正在下载并运行脚本..."
-    wget -q --no-check-certificate -O "$filename" "$url" && bash "$filename" || echo -e "脚本执行失败！"
+    echo "正在下载并运行脚本..."
+    wget -q --no-check-certificate -O "$filename" "$url" && bash "$filename" || echo "脚本执行失败！"
     rm -f "$filename"
     sleep 2
 }
@@ -103,5 +126,6 @@ download_and_run() {
 # 初始化并显示菜单
 check_root
 setup_alias
+setup_autostart
 download_or_replace_script
 show_menu
