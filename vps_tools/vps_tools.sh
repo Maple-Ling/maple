@@ -7,6 +7,8 @@ NC='\033[0m'             # 无颜色
 
 # 工具箱名称
 TOOLBOX_NAME="Maple工具箱"
+VPS_TOOLS_URL="https://raw.githubusercontent.com/Maple-Ling/maple/main/vps_tools/vps_tools.sh"
+VPS_TOOLS_FILE="vps_tools.sh"
 
 # 添加快捷键到 .bashrc（仅执行一次）
 setup_alias() {
@@ -19,27 +21,25 @@ setup_alias() {
 
 # 下载并替换 vps_tools.sh 脚本（避免重复下载）
 download_vps_tools() {
-    # 检查是否已存在 vps_tools.sh 文件，如果已存在，跳过下载
-    if [ ! -f vps_tools.sh ]; then
-        echo -e "${PINK}正在下载最新的 vps_tools.sh 脚本...${NC}"
-        wget -q -O vps_tools.sh https://raw.githubusercontent.com/Maple-Ling/maple/main/vps_tools/vps_tools.sh && \
-        chmod +x vps_tools.sh
+    # 检查是否已存在 vps_tools.sh 文件，并且文件是否与远程文件一致
+    if [ ! -f "$VPS_TOOLS_FILE" ] || ! wget -q --spider "$VPS_TOOLS_URL"; then
+        echo -e "${PINK}文件不存在或下载失败，正在重新下载脚本...${NC}"
+        wget -q -O "$VPS_TOOLS_FILE" "$VPS_TOOLS_URL" && chmod +x "$VPS_TOOLS_FILE"
     else
-        echo -e "${PINK}vps_tools.sh 已存在，跳过下载。${NC}"
+        echo -e "${PINK}vps_tools.sh 已存在且为最新版本，跳过下载。${NC}"
     fi
 
-    # 运行下载的脚本
-    ./vps_tools.sh
+    # 执行下载的脚本
+    ./$VPS_TOOLS_FILE
 }
 
 # 更新脚本文件
 update_script() {
     echo -e "${PINK}正在更新脚本文件...${NC}"
-    wget -q -O vps_tools.sh https://raw.githubusercontent.com/Maple-Ling/maple/main/vps_tools/vps_tools.sh && \
-    chmod +x vps_tools.sh
+    wget -q -O "$VPS_TOOLS_FILE" "$VPS_TOOLS_URL" && chmod +x "$VPS_TOOLS_FILE"
     echo -e "${PINK}脚本更新完成。${NC}"
     # 执行更新后的脚本
-    ./vps_tools.sh
+    ./$VPS_TOOLS_FILE
 }
 
 # 主菜单
