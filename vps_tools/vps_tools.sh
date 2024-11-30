@@ -100,14 +100,14 @@ warp_tools() {
     clear
     echo "WARP 工具:"
     echo ""
-    echo "1  WARP 安装脚本"
+    echo "1  F佬Warp"
     echo ""
     echo "0  返回上一级"
     echo ""
 
     read -p "请输入选项: " tool_choice
     case $tool_choice in
-        1) download_and_run "https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh" ;;
+        1) download_and_run "wget -N https://raw.githubusercontent.com/fscarmen/warp/main/menu.sh && bash menu.sh" ;;
         0) show_menu ;;
         *) echo "无效选项，请重试。"; sleep 1; warp_tools ;;
     esac
