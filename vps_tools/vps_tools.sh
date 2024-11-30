@@ -17,11 +17,29 @@ setup_alias() {
     fi
 }
 
-# 下载并替换 vps_tools.sh 脚本
+# 下载并替换 vps_tools.sh 脚本（避免重复下载）
 download_vps_tools() {
-    echo -e "${PINK}正在下载最新的 vps_tools.sh 脚本...${NC}"
+    # 检查是否已存在 vps_tools.sh 文件，如果已存在，跳过下载
+    if [ ! -f vps_tools.sh ]; then
+        echo -e "${PINK}正在下载最新的 vps_tools.sh 脚本...${NC}"
+        wget -q -O vps_tools.sh https://raw.githubusercontent.com/Maple-Ling/maple/main/vps_tools/vps_tools.sh && \
+        chmod +x vps_tools.sh
+    else
+        echo -e "${PINK}vps_tools.sh 已存在，跳过下载。${NC}"
+    fi
+
+    # 运行下载的脚本
+    ./vps_tools.sh
+}
+
+# 更新脚本文件
+update_script() {
+    echo -e "${PINK}正在更新脚本文件...${NC}"
     wget -q -O vps_tools.sh https://raw.githubusercontent.com/Maple-Ling/maple/main/vps_tools/vps_tools.sh && \
-    chmod +x vps_tools.sh && ./vps_tools.sh
+    chmod +x vps_tools.sh
+    echo -e "${PINK}脚本更新完成。${NC}"
+    # 执行更新后的脚本
+    ./vps_tools.sh
 }
 
 # 主菜单
@@ -33,6 +51,7 @@ show_menu() {
     printf "%-42s %-42s\n" "左侧菜单:" "右侧菜单:"
     printf "%-42s %-42s\n" "$(printf "(%-3d)" 1) 节点搭建" "$(printf "(%-3d)" 2) WARP 工具"
     printf "%-42s %-39s\n" "$(printf "(%-3d)" 0) 返回上一级" "$(printf "(%-3d)" 99) 退出工具箱"
+    printf "%-42s %-39s\n" "$(printf "(%-3d)" 88) 更新脚本" ""
 
     echo
 
@@ -42,6 +61,7 @@ show_menu() {
         2) warp_tools ;;
         0) show_menu ;;
         99) exit 0 ;;
+        88) update_script ;;
         *) echo "无效选项，请重试。"; sleep 1; show_menu ;;
     esac
 }
