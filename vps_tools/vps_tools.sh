@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # 定义颜色代码
-PINK='\033[1;35m'  # 粉色
-NC='\033[0m'       # 无颜色
+LIGHT_BLUE='\033[1;34m'  # 浅蓝色
+PINK='\033[1;35m'        # 粉色
+NC='\033[0m'             # 无颜色
 
 # 工具箱名称
 TOOLBOX_NAME="Maple工具箱"
@@ -16,14 +17,22 @@ setup_alias() {
     fi
 }
 
+# 下载并替换 vps_tools.sh 脚本
+download_vps_tools() {
+    echo -e "${PINK}正在下载最新的 vps_tools.sh 脚本...${NC}"
+    wget -q -O vps_tools.sh https://raw.githubusercontent.com/Maple-Ling/maple/main/vps_tools/vps_tools.sh && \
+    chmod +x vps_tools.sh && ./vps_tools.sh
+}
+
 # 主菜单
 show_menu() {
     clear
-    echo -e "${PINK}${TOOLBOX_NAME}${NC}"
+    echo -e "${LIGHT_BLUE}${TOOLBOX_NAME}${NC}"
 
-    printf "%-20s %s\n" "左侧菜单:" "右侧菜单:"
-    printf "%-20s %s\n" "(1) 节点搭建" "(2) WARP 工具"
-    printf "%-20s %s\n" "(0) 返回上一级" "(99) 退出工具箱"
+    # 输出左侧菜单与右侧菜单对齐
+    printf "%-42s %-42s\n" "左侧菜单:" "右侧菜单:"
+    printf "%-42s %-42s\n" "$(printf "(%-3d)" 1) 节点搭建" "$(printf "(%-3d)" 2) WARP 工具"
+    printf "%-42s %-39s\n" "$(printf "(%-3d)" 0) 返回上一级" "$(printf "(%-3d)" 99) 退出工具箱"
 
     echo
 
@@ -41,9 +50,9 @@ show_menu() {
 node_setup_tools() {
     clear
     echo -e "${PINK}节点搭建工具:${NC}"
-    echo "1) Hysteria2 安装脚本"
-    echo "2) Sing-box 安装脚本"
-    echo "(0) 返回上一级"
+    echo "  $(printf "(%-3d)" 1) Hysteria2 安装脚本"
+    echo "  $(printf "(%-3d)" 2) Sing-box 安装脚本"
+    echo "  $(printf "(%-3d)" 0) 返回上一级"
 
     read -p "请输入选项: " tool_choice
     case $tool_choice in
@@ -58,8 +67,8 @@ node_setup_tools() {
 warp_tools() {
     clear
     echo -e "${PINK}WARP 工具:${NC}"
-    echo "1) WARP 安装脚本"
-    echo "(0) 返回上一级"
+    echo "  $(printf "(%-3d)" 1) WARP 安装脚本"
+    echo "  $(printf "(%-3d)" 0) 返回上一级"
 
     read -p "请输入选项: " tool_choice
     case $tool_choice in
@@ -81,4 +90,5 @@ download_and_run() {
 
 # 初始化并显示菜单
 setup_alias
+download_vps_tools  # 下载并替换 vps_tools.sh
 show_menu
