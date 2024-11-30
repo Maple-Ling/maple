@@ -20,16 +20,18 @@ setup_alias() {
 show_menu() {
     clear
     echo -e "${PINK}${TOOLBOX_NAME}${NC}"
-    echo "==========================================="
-    printf "  %-20s %20s\n" "(1) 节点搭建" "(2) WARP 工具"
-    echo "==========================================="
-    echo "  (99) 退出工具箱"
-    echo "==========================================="
+
+    printf "%-20s %s\n" "左侧菜单:" "右侧菜单:"
+    printf "%-20s %s\n" "(1) 节点搭建" "(2) WARP 工具"
+    printf "%-20s %s\n" "(0) 返回上一级" "(99) 退出工具箱"
+
+    echo
 
     read -p "请输入选项: " choice
     case $choice in
         1) node_setup_tools ;;
         2) warp_tools ;;
+        0) show_menu ;;
         99) exit 0 ;;
         *) echo "无效选项，请重试。"; sleep 1; show_menu ;;
     esac
