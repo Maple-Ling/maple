@@ -33,22 +33,6 @@ get_local_hash() {
     fi
 }
 
-# 下载并替换 vps_tools.sh 脚本（避免重复下载）
-download_vps_tools() {
-    local remote_hash=$(get_remote_hash)
-    local local_hash=$(get_local_hash)
-
-    # 如果文件不存在或者文件内容不同，则下载最新版本
-    if [ "$remote_hash" != "$local_hash" ]; then
-        echo -e "${PINK}vps_tools.sh 文件已过期或不存在，正在下载最新脚本...${NC}"
-        wget -q -O "$VPS_TOOLS_FILE" "$VPS_TOOLS_URL" && chmod +x "$VPS_TOOLS_FILE"
-    else
-        echo -e "${PINK}vps_tools.sh 已是最新版本，跳过下载。${NC}"
-    fi
-
-    # 执行下载的脚本
-    ./$VPS_TOOLS_FILE
-}
 
 # 更新脚本文件
 update_script() {
