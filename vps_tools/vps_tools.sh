@@ -4,21 +4,47 @@
 RED='\033[1;31m'
 GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
+PINK='\033[1;48;5;211m' # 粉色背景
 NC='\033[0m' # No Color
 
-# 创建快捷命令 m
-echo "alias m='${0}'" >> ~/.bashrc
+# 添加别名到用户的 .bashrc 文件中
+echo "alias m='${BASH_SOURCE[0]}'" >> ~/.bashrc
 source ~/.bashrc
+
+# 创建 systemd 服务来管理脚本
+cat <<EOF | sudo tee /etc/systemd/system/maple.service
+[Unit]
+Description=Maple工具箱
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=${BASH_SOURCE[0]}
+ExecStop=/bin/kill -15 $MAINPID
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# 使服务生效并启动
+sudo systemctl daemon-reload
+sudo systemctl enable maple.service
+sudo systemctl start maple.service
 
 echo -e "${GREEN}Maple工具箱${NC}"
 echo ""
 
+# 菜单函数和其他函数
+
 menu() {
     echo "请选择一个分类:"
+
     echo "(1) 节点搭建"
+
     echo "(2) WARP工具"
+
     echo "(0) 返回"
-    echo "(99) 退出工具箱"
+
     read -p "请输入选项: " choice
     case $choice in
         1)
