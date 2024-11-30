@@ -4,11 +4,12 @@
 RED='\033[1;31m'
 GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
-PINK='\033[1;48;5;211m' # 粉色背景
 NC='\033[0m' # No Color
 
-# 添加别名到用户的 .bashrc 文件中
-echo "alias m='${BASH_SOURCE[0]}'" >> ~/.bashrc
+# 添加别名到用户的 .bashrc 文件中，避免重复添加
+if ! grep -q "alias m='${BASH_SOURCE[0]}'" ~/.bashrc; then
+    echo "alias m='${BASH_SOURCE[0]}'" >> ~/.bashrc
+fi
 source ~/.bashrc
 
 # 创建 systemd 服务来管理脚本
@@ -20,7 +21,7 @@ After=network.target
 [Service]
 Type=simple
 ExecStart=${BASH_SOURCE[0]}
-ExecStop=/bin/kill -15 $MAINPID
+ExecStop=/bin/kill -15 \$MAINPID
 
 [Install]
 WantedBy=multi-user.target
@@ -38,11 +39,10 @@ echo ""
 
 menu() {
     echo -e "${NC}请选择一个分类:${NC}"
-
-    printf "%-10s" "(1) 节点搭建"
-    printf "%-10s" "(2) WARP工具"
-
-    echo -e "(0) 返回\n(99) 退出工具箱"
+    echo "(1) ${GREEN}节点搭建${NC}"
+    echo "(2) ${GREEN}WARP工具${NC}"
+    echo "(0) 返回"
+    echo "(99) 退出工具箱"
 
     read -p "请输入选项: " choice
     case $choice in
