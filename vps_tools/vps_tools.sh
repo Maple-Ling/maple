@@ -44,8 +44,7 @@ show_menu() {
     # 输出左侧菜单与右侧菜单对齐
     printf "%-45s %-45s\n" "左侧菜单:" "右侧菜单:"
     printf "%-45s %-45s\n" "1  节点搭建" "2  WARP 工具"
-    printf "%-45s\n" "0  返回上一级"
-    printf "%-45s\n" "99  退出工具箱"
+    printf "%-45s\n" "0  退出工具箱"
 
     echo
 
