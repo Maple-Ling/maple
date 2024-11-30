@@ -19,13 +19,17 @@ setup_alias() {
     fi
 }
 
-# 下载并执行最新的 vps_tools.sh 脚本
-update_script() {
-    echo -e "${PINK}正在更新脚本文件...${NC}"
-    wget -q -O "$VPS_TOOLS_FILE" "$VPS_TOOLS_URL" && chmod +x "$VPS_TOOLS_FILE"
-    echo -e "${PINK}脚本更新完成。${NC}"
-    # 执行更新后的脚本
-    ./$VPS_TOOLS_FILE
+# 下载并检查文件是否已存在
+download_or_replace_script() {
+    echo -e "${PINK}正在检查脚本文件...${NC}"
+
+    if [ -f "$VPS_TOOLS_FILE" ]; then
+        echo -e "${PINK}文件已存在，正在替换脚本...${NC}"
+        wget -q -O "$VPS_TOOLS_FILE" "$VPS_TOOLS_URL" && chmod +x "$VPS_TOOLS_FILE"
+    else
+        echo -e "${PINK}文件不存在，正在下载脚本...${NC}"
+        wget -q -O "$VPS_TOOLS_FILE" "$VPS_TOOLS_URL" && chmod +x "$VPS_TOOLS_FILE"
+    fi
 }
 
 # 主菜单
@@ -34,9 +38,9 @@ show_menu() {
     echo -e "${LIGHT_BLUE}${TOOLBOX_NAME}${NC}"
 
     # 输出左侧菜单与右侧菜单对齐
-    printf "%-43s %-43s\n" "左侧菜单:" "右侧菜单:"
-    printf "%-43s %-43s\n" "$(printf "(%-3s)" 1) 节点搭建" "$(printf "(%-3s)" 2) WARP 工具"
-    printf "%-43s %-43s\n" "$(printf "(%-3s)" 0) 返回上一级" "$(printf "(%-3s)" 99) 退出工具箱" ""
+    printf "%-45s %-45s\n" "左侧菜单:" "右侧菜单:"
+    printf "%-45s %-45s\n" "$(printf "(%-3s)" 1) 节点搭建" "$(printf "(%-3s)" 2) WARP 工具"
+    printf "%-45s %-45s\n" "$(printf "(%-3s)" 0) 返回上一级" "$(printf "(%-3s)" 99) 退出工具箱"
 
     echo
 
@@ -46,7 +50,6 @@ show_menu() {
         2) warp_tools ;;
         0) show_menu ;;
         99) exit 0 ;;
-        88) update_script ;;
         *) echo "无效选项，请重试。"; sleep 1; show_menu ;;
     esac
 }
@@ -95,4 +98,5 @@ download_and_run() {
 
 # 初始化并显示菜单
 setup_alias
+download_or_replace_script
 show_menu
