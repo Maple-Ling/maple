@@ -311,6 +311,19 @@
       "filterable": 1,
       "changeable": 0,
       "ext": "./json/韩剧tv.json"
+    },
+    {
+      "key": "模板",
+      "name": "🤓模板🤔☞凌枫☘",
+      "type": 3,
+      "api": "csp_XBPQ",
+      "timeout": 15,
+      "playerType": 2,
+      "searchable": 1,
+      "quickSearch": 1,
+      "filterable": 1,
+      "changeable": 0,
+      "ext": "./json/模板.json"
     }
   ],
   "flags": [
