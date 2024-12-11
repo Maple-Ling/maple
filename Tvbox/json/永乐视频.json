@@ -1,0 +1,40 @@
+{
+  "主页": "https://www.59v.net",
+  "分类url": "https://www.59v.net/vodtype/area/{area}/{cateId}/page/{catePg}/class/{class}/year/{year}/",
+  "分类": "电影&电视剧&动漫&综艺",
+  "分类值": "1&2&4&3",
+  
+  "数组": "",
+  "图片": "",
+  "标题": "",
+  "副标题": "",
+  "链接": "",
+  "链接前缀": "",
+  
+  "搜索模式": "1",
+  "搜索后缀": "",
+  
+  "影片年代": "年份：&&</p >",
+  "影片地区": "地区：&&/",
+  "影片类型": "类型：&&/",
+  "导演": "导演：&&</p >",
+  "主演": "主演：&&</p >",
+  "简介": "display: none;\">&&</span>",
+  
+  "线路数组": "",
+  "线路标题": "",
+  "播放数组": "",
+  "播放标题": ""
+}
+
+{cateId}-{area}--{class}-----{catePg}---{year}.html
+
+/area/{area}/{cateId}/page/{catePg}/class/{class}/year/{year}.html
+
+
+area/{area}/     地区
+id/{cateId}/      大类
+page/{catePg}/  分页
+class/{class}/    小类
+year/{year}/     时间
+by/{by}/         语言？
