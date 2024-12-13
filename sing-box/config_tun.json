@@ -59,7 +59,6 @@
       "listen": "0.0.0.0",
       "listen_port": 1536,
       "sniff": true,
-      "sniff_override_destination": false
     },
   ],
 
