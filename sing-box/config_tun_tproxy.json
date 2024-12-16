@@ -41,18 +41,11 @@
   "inbounds": [
     {
       "type": "tun",
-      "address": "172.19.0.1/30",
-      "mtu": 9000,
+      "address": "10.0.0.1/24",
+      "mtu": 1400,
       "auto_route": true,
       "sniff": true,
-      "stack": "mixed"
-    },
-    {
-      "type": "mixed",
-      "listen": "0.0.0.0",
-      "listen_port": 7892,
-      "sniff": true,
-      "users": []
+      "stack": "system"
     },
     {
       "type": "tproxy",
