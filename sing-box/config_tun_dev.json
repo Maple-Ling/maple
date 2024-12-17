@@ -43,19 +43,28 @@
   "inbounds": [
   {
       "type": "tun",
+      "tag": "tun-in",
+      "interface_name": "tun0",
       "address": "172.19.0.1/30",
       "mtu": 1500,
+      "stack": "system",
       "auto_route": true,
-      "auto_redirect": true,
       "strict_route": true,
-      "stack": "mixed"
+      "sniff": true
     },
     {
       "type": "tproxy",
-      "listen": "0.0.0.0",
+      "tag": "tproxy-in",
+      "listen": "::",
       "listen_port": 1536,
+      "sniff": true
+    },
+    {
+      "type": "mixed",
+      "tag": "mixed-in",
+      "listen": "::",
+      "listen_port": 7892,
       "sniff": true,
-      "sniff_override_destination": false
     }
 ],
 
