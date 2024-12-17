@@ -67,7 +67,7 @@
     "rules": [
       { "action": "sniff" },
       { "clash_mode": "direct", "outbound": "🚅 直连" },
-      { "clash_mode": "Global", "outbound": "global" },
+      { "clash_mode": "global", "outbound": "GLOBAL" },
       { "domain": ["clash.razord.top", "yacd.metacubex.one", "yacd.haishan.me", "d.metacubex.one"], "outbound": "🚅 直连" },
       { "rule_set": ["geosite-private", "geoip-private" ], "outbound": "🚅 直连" },
       { "rule_set": "rule-direct", "outbound": "🚅 直连" },
