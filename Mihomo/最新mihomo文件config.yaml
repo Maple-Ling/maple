@@ -1,0 +1,191 @@
+# 机场订阅，名称不能重复
+proxy-providers:
+  自己用:
+    type: http
+    interval: 3600
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 60
+    proxy: 🚅 直连
+    url: "https://sublinkx.maple521.site/c/?token=679de2dec39061b030e24274c9d7ab42"
+      
+  别人用:
+    type: http
+    interval: 3600
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 60
+    proxy: 🚅 直连
+    url: "https://sublinkx.maple521.site/c/?token=631b4d51d7c18b84efd4cd2b09323bf8"
+    
+  院长:
+    type: http
+    interval: 3600
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 60
+    proxy: 🚅 直连
+    url: "https://sub.vip.sd/JPa6vvFgygVtNP2sGJ2r/download/NL"
+
+
+ 
+# 全局配置
+allow-lan: true # 允许局域网连接
+mode: rule # 此项拥有默认值，默认为规则模式
+log-level: error # 日志等级 silent/error/warning/info/debug
+ipv6: true
+find-process-mode: off # 控制是否让 Clash 去匹配进程
+profile: # 策略组选择和fakeip缓存
+  store-selected: true
+  # 储存 API 对策略组的选择，以供下次启动时使用
+  store-fake-ip: true
+  # 储存 fakeip 映射表，域名再次发生连接时，使用原有映射地址
+unified-delay: true # 开启统一延迟时，会计算 RTT，以消除连接握手等带来的不同类型节点的延迟差异
+tcp-concurrent: true # TCP并发
+global-client-fingerprint: chrome # 全局客户端指纹
+
+# 端口
+tproxy-port: 7893 # Transparent proxy server port for Linux (TProxy TCP and TProxy UDP)
+port: 7890 # HTTP(S) 代理服务器端口
+socks-port: 7891 # SOCKS5 代理端口
+mixed-port: 10801 # HTTP(S) 和 SOCKS 代理混合端口
+redir-port: 7892 # 透明代理端口，用于 Linux 和 MacOS
+global-ua: clash.meta # 自定义外部资源下载时使用的的 UA，默认为 clash.meta
+etag-support: true # 外部资源下载的 ETag 支持，默认为 true
+geodata-mode: false # 可选 true/false,true为 dat,false为mmdb
+geodata-loader: memconservative # standard：标准加载器,memconservative：专为内存受限 (小内存) 设备优化的加载器 (默认值)
+geo-auto-update: false # 自动更新 GEO
+geo-update-interval: 24 # 更新间隔，单位为小时
+geox-url:
+  geoip: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
+  geosite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat"
+  mmdb: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb"
+# 控制面板
+external-controller: 0.0.0.0:9090
+secret: "971212"
+external-ui-name: MetaCubeXD
+external-ui: ui
+external-ui-url: "https://github.maple521.site/https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip"
+#external-ui-url: "https://github.com/MetaCubeX/Yacd-meta/archive/refs/heads/gh-pages.zip"
+
+# 流量嗅探
+sniffer:
+  enable: true
+  sniff:
+    HTTP:
+      ports: [80, 8080-8880]
+      override-destination: true
+    TLS:
+      ports: [443, 8443]
+    QUIC:
+      ports: [443, 8443]
+  skip-domain:
+    - "Mijia Cloud"
+    - "+.push.apple.com"
+  
+# DNS模块
+dns:
+  enable: true
+  ipv6: true # 是否解析 IPV6, 如为 false, 则回应 AAAA 的空解析
+  respect-rules: true # dns 连接遵守路由规则，需配置 proxy-server-nameserver
+  enhanced-mode: fake-ip # 可选值 fake-ip/redir-host，默认redir-host
+  fake-ip-filter: # fakeip 过滤，以下地址不会下发 fakeip 映射用于连接
+    - "+.lan"
+    - "+.local"
+    - "+.market.xiaomi.com"
+  nameserver: # 默认的域名解析服务器
+    - https://120.53.53.53/dns-query
+    - https://223.5.5.5/dns-query
+  proxy-server-nameserver: # 代理节点域名解析服务器，仅用于解析代理节点的域名，如果不填则遵循nameserver-policy、nameserver和fallback的配置
+    - https://120.53.53.53/dns-query
+    - https://223.5.5.5/dns-query
+  nameserver-policy: # 指定域名查询的解析服务器，可使用 geosite, 优先于 nameserver/fallback 查询
+    "rule-set:cn_domain,private_domain,rule-direct_domain":
+      - https://120.53.53.53/dns-query
+      - https://223.5.5.5/dns-query
+    "rule-set:geolocation-!cn,rule-proxy_domain":
+      - "https://dns.cloudflare.com/dns-query"
+      - "https://dns.google/dns-query"
+      
+# Tun配置
+tun:
+  enable: true
+  stack: system # gvisor/mixed
+  dns-hijack:
+    - "any:53"
+    - "tcp://any:53"
+  auto-route: true # 自动设置全局路由，可以自动将全局流量路由进入 tun 网卡
+  auto-redirect: true # 仅支持 Linux，自动配置 iptables/nftables 以重定向 TCP 连接，需要auto-route已启用
+  auto-detect-interface: true # 自动选择流量出口接口，多出口网卡同时连接的设备建议手动指定出口网卡
+
+proxies:
+- name: "🚅 直连"
+  type: direct
+  udp: true
+ 
+# 锚点
+pr: &pr {type: select, proxies: [🛸 代理, 🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇺🇸 美国节点, 🇯🇵 日本节点, 🇩🇪 德国节点, 🇳🇱 荷兰节点, 🌐 全部节点, 🚅 直连]}
+# 策略组
+proxy-groups:
+  - {name: 🛸 代理, type: select, proxies: [🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇺🇸 美国节点, 🇯🇵 日本节点, 🇩🇪 德国节点, 🇳🇱 荷兰节点, 🌐 全部节点, 🚅 直连]}
+  - {name: 👀 Google,!!merge <<: *pr}
+  - {name: 🤖 ChatGPT,!!merge <<: *pr}
+  - {name: 🎵 TikTok,!!merge <<: *pr}
+  - {name: 📲 Telegram,!!merge <<: *pr}
+  - {name: 🎥 Netflix,!!merge <<: *pr}
+  - {name: 🎥 Disney,!!merge <<: *pr}
+  - {name: 🚧 兜底,!!merge <<: *pr}
+  - {name: 🇭🇰 香港节点, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
+  - {name: 🇭🇰 香港流媒体, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
+  - {name: 🇯🇵 日本节点, type: select, include-all: true, filter: "(?i)日|jp|japan"}
+  - {name: 🇺🇸 美国节点, type: select, include-all: true, filter: "(?i)美|us|unitedstates|united states"}
+  - {name: 🇩🇪 德国节点, type: select, include-all: true, filter: "(?i)德|de|Deutschland"}
+  - {name: 🇳🇱 荷兰节点, type: select, include-all: true, filter: "(?i)荷|nl|Nederland"}
+  - {name: 🌐 全部节点, type: select, include-all: true}
+
+rules:
+  - RULE-SET,private_ip,🚅 直连,no-resolve
+  - RULE-SET,rule-direct_domain,🚅 直连
+  - RULE-SET,cn_domain,🚅 直连
+  - RULE-SET,tiktok_domain,🎵 TikTok
+  - RULE-SET,netflix_domain,🎥 Netflix
+  - RULE-SET,disney_domain,🎥 Disney
+  - RULE-SET,telegram_domain,📲 Telegram
+  - RULE-SET,openai,🤖 ChatGPT
+  - RULE-SET,rule-proxy_domain,🛸 代理
+  - RULE-SET,google_domain,👀 Google
+
+  - RULE-SET,google_ip,👀 Google
+  - RULE-SET,netflix_ip,🎥 Netflix,no-resolve
+  - RULE-SET,telegram_ip,📲 Telegram,no-resolve
+  - RULE-SET,cn_ip,🚅 直连
+  - RULE-SET,geolocation-!cn,🛸 代理
+  - MATCH,🚧 兜底
+
+
+rule-anchor:
+  ip: &ip {type: http, interval: 86400, behavior: ipcidr, format: mrs}
+  domain: &domain {type: http, interval: 86400, behavior: domain, format: mrs}
+  list: &list {type: http, interval: 86400, behavior: domain, format: text}
+  class: &class {type: http, interval: 86400, behavior: classical, format: text}
+rule-providers:
+  rule-direct_domain: {!!merge <<: *list, url: "https://github.maple521.site/https://raw.githubusercontent.com/Maple-Ling/maple/refs/heads/main/Mihomo/rule-direct.list"}
+  rule-proxy_domain: {!!merge <<: *list, url: "https://github.maple521.site/https://raw.githubusercontent.com/Maple-Ling/maple/refs/heads/main/Mihomo/rule-proxy.list"}
+  openai: {!!merge <<: *domain, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/openai.mrs"}
+  private_domain: {!!merge <<: *domain, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
+  geolocation-!cn: {!!merge <<: *domain, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"}
+  google_domain: {!!merge <<: *domain, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/google.mrs"}
+  telegram_domain: {!!merge <<: *domain, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"}
+  netflix_domain: {!!merge <<: *domain, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.mrs"}
+  disney_domain: {!!merge <<: *domain, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/disney.mrs"}
+  tiktok_domain: {!!merge <<: *domain, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tiktok.mrs"}
+  cn_domain: {!!merge <<: *domain, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"}
+  
+  cn_ip: {!!merge <<: *ip, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"}
+  private_ip: {!!merge <<: *ip, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/private.mrs"}
+  google_ip: {!!merge <<: *ip, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/google.mrs"}
+  telegram_ip: {!!merge <<: *ip, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/telegram.mrs"}
+  netflix_ip: {!!merge <<: *ip, url: "https://github.maple521.site/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/netflix.mrs"}
