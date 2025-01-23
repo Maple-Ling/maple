@@ -28,7 +28,17 @@ proxy-providers:
       url: https://www.gstatic.com/generate_204
       interval: 60
     proxy: 🚅 直连
-    url: "https://sub.vip.sd/JPa6vvFgygVtNP2sGJ2r/download/NL"
+    url: "https://sub.vip.sd/JPa6vvFgygVtNP2sGJ2r/download/NL?target=Clash"
+
+  分享社:
+    type: http
+    interval: 3600
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 60
+    proxy: 🚅 直连
+    url: "https://raw.kkgithub.com/ripaojiedian/freenode/main/clash"
 
 
  
