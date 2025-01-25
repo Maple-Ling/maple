@@ -10,7 +10,7 @@ proxy-providers:
     proxy: 🚅 直连
     url: "https://sublinkx.maple521.site/c/?token=679de2dec39061b030e24274c9d7ab42"
       
-  别人用:
+  流量光:
     type: http
     interval: 3600
     health-check:
@@ -18,7 +18,27 @@ proxy-providers:
       url: https://www.gstatic.com/generate_204
       interval: 60
     proxy: 🚅 直连
-    url: "https://sublinkx.maple521.site/c/?token=631b4d51d7c18b84efd4cd2b09323bf8"
+    url: "https://rgergergergerg6555.saojc.xyz/api/v1/client/subscribe?token=e9b01bcf4afa0d65a1ac1bd523ad53b4"
+    
+  三瓜云:
+    type: http
+    interval: 3600
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 60
+    proxy: 🚅 直连
+    url: "https://sanguayun.jiumaojiu.net/s/ebd7afebbe19dc1e58c1d48dd2e6f890"
+
+  Anthon:
+    type: http
+    interval: 3600
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 60
+    proxy: 🚅 直连
+    url: "https://www.anthoncloud.com/sub/fZ8503N4mKkub2or/clash"
     
   院长:
     type: http
@@ -28,18 +48,7 @@ proxy-providers:
       url: https://www.gstatic.com/generate_204
       interval: 60
     proxy: 🚅 直连
-    url: "https://sub.vip.sd/JPa6vvFgygVtNP2sGJ2r/download/NL?target=Clash"
-
-  分享社:
-    type: http
-    interval: 3600
-    health-check:
-      enable: true
-      url: https://www.gstatic.com/generate_204
-      interval: 60
-    proxy: 🚅 直连
-    url: "https://raw.kkgithub.com/ripaojiedian/freenode/main/clash"
-
+    url: "https://sub.vip.sd/JPa6vvFgygVtNP2sGJ2r/download/nlmjj?target=Clash"
 
  
 # 全局配置
@@ -137,10 +146,10 @@ proxies:
   udp: true
  
 # 锚点
-pr: &pr {type: select, proxies: [🛸 代理, 🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇺🇸 美国节点, 🇯🇵 日本节点, 🇩🇪 德国节点, 🇳🇱 荷兰节点, 🌐 全部节点, 🚅 直连]}
+pr: &pr {type: select, proxies: [🛸 代理, 🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🇩🇪 德国节点, 🇳🇱 荷兰节点, 🌐 全部节点, 🚅 直连]}
 # 策略组
 proxy-groups:
-  - {name: 🛸 代理, type: select, proxies: [🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇺🇸 美国节点, 🇯🇵 日本节点, 🇩🇪 德国节点, 🇳🇱 荷兰节点, 🌐 全部节点, 🚅 直连]}
+  - {name: 🛸 代理, type: select, proxies: [🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🇩🇪 德国节点, 🇳🇱 荷兰节点, 🌐 全部节点, 🚅 直连]}
   - {name: 👀 Google,!!merge <<: *pr}
   - {name: 🤖 ChatGPT,!!merge <<: *pr}
   - {name: 🎵 TikTok,!!merge <<: *pr}
@@ -150,6 +159,7 @@ proxy-groups:
   - {name: 🚧 兜底,!!merge <<: *pr}
   - {name: 🇭🇰 香港节点, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
   - {name: 🇭🇰 香港流媒体, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
+  - {name: 🇰🇷 韩国节点, type: select, include-all: true, filter: "(?i)韩|kr|korea"}
   - {name: 🇯🇵 日本节点, type: select, include-all: true, filter: "(?i)日|jp|japan"}
   - {name: 🇺🇸 美国节点, type: select, include-all: true, filter: "(?i)美|us|unitedstates|united states"}
   - {name: 🇩🇪 德国节点, type: select, include-all: true, filter: "(?i)德|de|Deutschland"}
