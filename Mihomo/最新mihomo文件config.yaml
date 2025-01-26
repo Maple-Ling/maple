@@ -157,7 +157,7 @@ proxy-groups:
   - {name: 🎥 Netflix,!!merge <<: *pr}
   - {name: 🎥 Disney,!!merge <<: *pr}
   - {name: 🚧 兜底,!!merge <<: *pr}
-  - {name: 🇭🇰 香港节点, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
+  - {name: 🇭🇰 香港节点, type: url-test, tolerance: 20, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
   - {name: 🇭🇰 香港流媒体, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
   - {name: 🇰🇷 韩国节点, type: select, include-all: true, filter: "(?i)韩|kr|korea"}
   - {name: 🇯🇵 日本节点, type: select, include-all: true, filter: "(?i)日|jp|japan"}
