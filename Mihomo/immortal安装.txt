@@ -1,3 +1,2 @@
 opkg update
-opkg install ca-bundle curl yq firewall4 ip-full kmod-in
-et-diag kmod-nft-tproxy kmod-tun luci-theme-argon openssh-sftp-server
+opkg install ca-bundle curl yq firewall4 ip-full kmod-inet-diag kmod-nft-tproxy kmod-tun luci-theme-argon openssh-sftp-server
