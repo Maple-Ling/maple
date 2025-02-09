@@ -91,20 +91,25 @@ dns:
   ipv6: true # 是否解析 IPV6, 如为 false, 则回应 AAAA 的空解析
   respect-rules: true # dns 连接遵守路由规则，需配置 proxy-server-nameserver
   enhanced-mode: fake-ip # 可选值 fake-ip/redir-host，默认redir-host
-  fake-ip-filter: # fakeip 过滤，以下地址不会下发 fakeip 映射用于连接
+  fake-ip-filter-mode: blacklist
+  fake-ip-filter:
     - "+.lan"
     - "+.local"
-    - "+.market.xiaomi.com"
-  nameserver: # 默认的域名解析服务器
-    - https://120.53.53.53/dns-query
-    - https://223.5.5.5/dns-query
-  proxy-server-nameserver: # 代理节点域名解析服务器，仅用于解析代理节点的域名，如果不填则遵循nameserver-policy、nameserver和fallback的配置
-    - https://120.53.53.53/dns-query
-    - https://223.5.5.5/dns-query
-  nameserver-policy: # 指定域名查询的解析服务器，可使用 geosite, 优先于 nameserver/fallback 查询
+    - rule-set:cn_domain
+    - rule-set:private_domain
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  proxy-server-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver-policy:
     "rule-set:cn_domain,private_domain,rule-direct_domain":
-      - https://120.53.53.53/dns-query
-      - https://223.5.5.5/dns-query
+    - 223.5.5.5
+    - 119.29.29.29
     "rule-set:geolocation-!cn,rule-proxy_domain":
       - "https://dns.cloudflare.com/dns-query"
       - "https://dns.google/dns-query"
@@ -126,10 +131,10 @@ proxies:
   udp: true
  
 # 锚点
-pr: &pr {type: select, proxies: [🛸 代理, 🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🇩🇪 德国节点, 🇳🇱 荷兰节点, 🌐 全部节点, 🚅 直连]}
+pr: &pr {type: select, proxies: [🛸 代理, 🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇸🇬 新加坡节点, 🇨🇳 台湾节点, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🇩🇪 德国节点, 🇳🇱 荷兰节点, 🌐 全部节点, 🚅 直连]}
 # 策略组
 proxy-groups:
-  - {name: 🛸 代理, type: select, proxies: [🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🇩🇪 德国节点, 🇳🇱 荷兰节点, 🌐 全部节点, 🚅 直连]}
+  - {name: 🛸 代理, type: select, proxies: [🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇸🇬 新加坡节点, 🇨🇳 台湾节点, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🇩🇪 德国节点, 🇳🇱 荷兰节点, 🌐 全部节点, 🚅 直连]}
   - {name: 👀 Google,!!merge <<: *pr}
   - {name: 🤖 ChatGPT,!!merge <<: *pr}
   - {name: 🎵 TikTok,!!merge <<: *pr}
@@ -149,9 +154,7 @@ proxy-groups:
   - {name: 🌐 全部节点, type: select, include-all: true}
 
 rules:
-  - RULE-SET,private_ip,🚅 直连,no-resolve
-  - RULE-SET,rule-direct_domain,🚅 直连
-  - RULE-SET,cn_domain,🚅 直连
+  - RULE-SET,private_domain,🚅 直连
   - RULE-SET,tiktok_domain,🎵 TikTok
   - RULE-SET,netflix_domain,🎥 Netflix
   - RULE-SET,disney_domain,🎥 Disney
@@ -159,13 +162,13 @@ rules:
   - RULE-SET,openai,🤖 ChatGPT
   - RULE-SET,rule-proxy_domain,🛸 代理
   - RULE-SET,google_domain,👀 Google
-
-
+  - RULE-SET,geolocation-!cn,🛸 代理
+  - RULE-SET,rule-direct_domain,🚅 直连
+  - RULE-SET,cn_domain,🚅 直连
   - RULE-SET,netflix_ip,🎥 Netflix,no-resolve
   - RULE-SET,telegram_ip,📲 Telegram,no-resolve
-  - RULE-SET,google_ip,👀 Google
+  - RULE-SET,google_ip,👀 Google,no-resolve
   - RULE-SET,cn_ip,🚅 直连
-  - RULE-SET,geolocation-!cn,🛸 代理
   - MATCH,🚧 兜底
 
 
