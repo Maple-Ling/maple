@@ -20,26 +20,6 @@ proxy-providers:
     proxy: 🚅 直连
     url: "https://rgergergergerg6555.saojc.xyz/api/v1/client/subscribe?token=e9b01bcf4afa0d65a1ac1bd523ad53b4"
     
-  三瓜云:
-    type: http
-    interval: 3600
-    health-check:
-      enable: true
-      url: https://www.gstatic.com/generate_204
-      interval: 60
-    proxy: 🚅 直连
-    url: "https://sanguayun.jiumaojiu.net/s/ebd7afebbe19dc1e58c1d48dd2e6f890"
-
-  Anthon:
-    type: http
-    interval: 3600
-    health-check:
-      enable: true
-      url: https://www.gstatic.com/generate_204
-      interval: 60
-    proxy: 🚅 直连
-    url: "https://www.anthoncloud.com/sub/fZ8503N4mKkub2or/clash"
-    
   院长:
     type: http
     interval: 3600
@@ -159,7 +139,9 @@ proxy-groups:
   - {name: 🚧 兜底,!!merge <<: *pr}
   - {name: 🇭🇰 香港节点, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
   - {name: 🇭🇰 香港流媒体, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
-  - {name: 🇰🇷 韩国节点, type: select, include-all: true, filter: "(?i)韩|kr|korea"}
+  - {name: 🇸🇬 新加坡节点, type: select, include-all: true, filter: "(?i)新|sg|singapore"}
+  - {name: 🇨🇳 台湾节点, type: select, include-all: true, filter: "(?i)台|tw|taiwan"}
+  - {name: 🇰🇷 韩国节点, type: select, include-all: true, filter: "(?i)韩|kr|korea|seoul"}
   - {name: 🇯🇵 日本节点, type: select, include-all: true, filter: "(?i)日|jp|japan"}
   - {name: 🇺🇸 美国节点, type: select, include-all: true, filter: "(?i)美|us|unitedstates|united states"}
   - {name: 🇩🇪 德国节点, type: select, include-all: true, filter: "(?i)德|de|Deutschland"}
@@ -178,9 +160,10 @@ rules:
   - RULE-SET,rule-proxy_domain,🛸 代理
   - RULE-SET,google_domain,👀 Google
 
-  - RULE-SET,google_ip,👀 Google
+
   - RULE-SET,netflix_ip,🎥 Netflix,no-resolve
   - RULE-SET,telegram_ip,📲 Telegram,no-resolve
+  - RULE-SET,google_ip,👀 Google
   - RULE-SET,cn_ip,🚅 直连
   - RULE-SET,geolocation-!cn,🛸 代理
   - MATCH,🚧 兜底
