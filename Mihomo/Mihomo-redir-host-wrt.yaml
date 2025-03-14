@@ -18,7 +18,7 @@ proxy-providers:
       url: https://www.gstatic.com/generate_204
       interval: 60
     proxy: 🚅 直连
-    url: "https://rgergergergerg6555.saojc.xyz/api/v1/client/subscribe?token=e9b01bcf4afa0d65a1ac1bd523ad53b4"
+    url: "https://rgergergergerg6555.saojc.xyz/api/v1/client/subscribe?token=6ee5172d49b91e8530c2fae44c504d43"
     
   院长:
     type: http
