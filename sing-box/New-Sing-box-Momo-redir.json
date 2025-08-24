@@ -55,7 +55,7 @@
     {"tag": "🎵 TikTok", "type": "selector", "outbounds": ["🚀 默认代理", "🇸🇬 新加坡自动", "🇭🇰 香港手动", "🇰🇷 韩国手动", "🇯🇵 日本手动", "🇺🇲 美国手动", "🐸 手动选择"]},
     {"tag": "🎥 Netflix", "type": "selector", "outbounds": ["🚀 默认代理", "🇸🇬 新加坡自动", "🇭🇰 香港手动", "🇰🇷 韩国手动", "🇯🇵 日本手动", "🇺🇲 美国手动", "🐸 手动选择"]},
     {"tag": "🐠 漏网之鱼", "type": "selector", "outbounds": ["🚀 默认代理", "🎯 全球直连"]},
-    {"tag": "🇸🇬 新加坡自动", "type": "urltest", "outbounds": null, "url": "", "interval": "3m", "tolerance": 50, "idle_timeout": "30m", "interrupt_exist_connections": false, "use_all_providers": true, "include": "新加坡|坡|SG|Singapore", "exclude": "日"},
+    {"tag": "🇸🇬 新加坡自动", "type": "urltest", "outbounds": null, "url": "", "interval": "1m", "tolerance": 30, "idle_timeout": "10m", "interrupt_exist_connections": false, "use_all_providers": true, "include": "新加坡|坡|SG|Singapore", "exclude": "日"},
     {"tag": "🇭🇰 香港手动", "type": "selector", "outbounds": null, "use_all_providers": true, "include" :"港|HK|(?i)Hong", "exclude": "日"},
     {"tag": "🇰🇷 韩国手动", "type": "selector", "outbounds": null, "use_all_providers": true, "include": "韩|kr|korea|seoul", "exclude": "日"},
     {"tag": "🇯🇵 日本手动", "type": "selector", "outbounds": null, "use_all_providers": true, "include": "🇯🇵|JP|jp|日本|日|Japan", "exclude": "HK"},
