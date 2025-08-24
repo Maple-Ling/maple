@@ -1,0 +1,19 @@
+{
+  "version": 2,
+  "rules": [
+    {
+      "domain_suffix": [
+        "koowo.cn",
+        "kuwo.cn",
+        "koowo.com",
+        "ppl.red",
+        "mini4k.com",
+        "cloudflare.com",
+        "digvps.com",
+        "nodeloc.cc",
+        "yiandrive.com",
+        "maple520.ggff.net"
+      ]
+    }
+  ]
+}
