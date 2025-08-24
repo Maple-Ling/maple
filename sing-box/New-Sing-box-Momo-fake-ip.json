@@ -9,7 +9,7 @@
           "interval": "10m",
           "timeout": "3s"
       },
-      "url": https://liangxin.xyz/api/v1/liangxin?OwO=0ca740db0830d75c5354f8c53a69b95b",
+      "url": "",
       "exclude": "官网|剩余|流量|套餐|免费|订阅|全球直连|到期时间|GB|Expire Date|Traffic|ExpireDate",
       "download_detour": "🎯 全球直连",
       "update_interval": "12h"
@@ -23,7 +23,7 @@
           "interval": "10m",
           "timeout": "3s"
       },
-      "url": ",
+      "url": "",
       "exclude": "官网|剩余|流量|套餐|免费|订阅|全球直连|到期时间|GB|Expire Date|Traffic|ExpireDate",
       "download_detour": "🎯 全球直连",
       "update_interval": "12h"
