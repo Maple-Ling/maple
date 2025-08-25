@@ -1,6 +1,16 @@
 # 机场订阅
 proxy-providers:
-  :
+  良心云:
+    type: http
+    interval: 3600
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 60
+    proxy: 🚅 直连
+    url: ""
+    
+  院长:
     type: http
     interval: 3600
     health-check:
@@ -47,11 +57,11 @@ geox-url:
   mmdb: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb"
 
 # 外部控制面板（保持不变）
-external-controller: 0.0.0.0:9090
-secret: "971212"
-external-ui-name: MetaCubeXD
+external-controller: 0.0.0.0:9999
+secret: "188271"
+external-ui-name: Zashboard
 external-ui: ui
-external-ui-url: "https://gh-proxy.com/https://github.com/MetaCubeX/metacubexd/archive/refs/heads/gh-pages.zip"
+external-ui-url: "https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip"
 
 # DNS 配置 —— 采用 redir-host 模式，增加 fallback 过滤防止 DNS 泄露
 dns:
@@ -107,11 +117,11 @@ proxies:
   udp: true
 
 # 锚点
-pr: &pr {type: select, proxies: [🛸 代理, 🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇸🇬 新加坡节点, 🇨🇳 台湾节点, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🇩🇪 德国节点, 🇳🇱 荷兰节点, 🌐 全部节点, 🚅 直连]}
+pr: &pr {type: select, proxies: [🛸 代理, 🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇸🇬 新加坡节点, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🌐 全部节点, 🚅 直连]}
 
 # 策略组
 proxy-groups:
-  - {name: 🛸 代理, type: select, proxies: [🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇸🇬 新加坡节点, 🇨🇳 台湾节点, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🇩🇪 德国节点, 🇳🇱 荷兰节点, 🌐 全部节点, 🚅 直连]}
+  - {name: 🛸 代理, type: select, proxies: [🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇸🇬 新加坡节点, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🌐 全部节点, 🚅 直连]}
   - {name: 👀 Google,!!merge <<: *pr}
   - {name: 🤖 ChatGPT,!!merge <<: *pr}
   - {name: 🎵 TikTok,!!merge <<: *pr}
@@ -121,17 +131,17 @@ proxy-groups:
   - {name: 🚧 兜底,!!merge <<: *pr}
   - {name: 🇭🇰 香港节点, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
   - {name: 🇭🇰 香港流媒体, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
-  - {name: 🇸🇬 新加坡节点, type: select, include-all: true, filter: "(?i)新|sg|singapore"}
-  - {name: 🇨🇳 台湾节点, type: select, include-all: true, filter: "(?i)台|tw|taiwan"}
+  - {name: 🇸🇬 新加坡节点, type: fallback, include-all: true, filter: "(?i)新|sg|singapore"}
   - {name: 🇰🇷 韩国节点, type: select, include-all: true, filter: "(?i)韩|kr|korea|seoul"}
   - {name: 🇯🇵 日本节点, type: select, include-all: true, filter: "(?i)日|jp|japan"}
   - {name: 🇺🇸 美国节点, type: select, include-all: true, filter: "(?i)美|us|unitedstates|united states"}
-  - {name: 🇩🇪 德国节点, type: select, include-all: true, filter: "(?i)德|de|Deutschland"}
-  - {name: 🇳🇱 荷兰节点, type: select, include-all: true, filter: "(?i)荷|nl|Nederland"}
   - {name: 🌐 全部节点, type: select, include-all: true}
 
 # 规则部分（优化顺序）
 rules:
+  - RULE-SET,private_domain,🚅 直连
+  - RULE-SET,rule-direct_domain,🚅 直连
+
   # 特定服务规则（优先处理）
   - RULE-SET,tiktok_domain,🎵 TikTok
   - RULE-SET,netflix_domain,🎥 Netflix
@@ -148,9 +158,7 @@ rules:
   - RULE-SET,google_ip,👀 Google,no-resolve
 
   # 直连规则（放在后面，避免覆盖代理规则）
-  - RULE-SET,private_domain,🚅 直连
   - RULE-SET,cn_domain,🚅 直连
-  - RULE-SET,rule-direct_domain,🚅 直连
   - RULE-SET,cn_ip,🚅 直连
 
   # 兜底规则（最后处理）
