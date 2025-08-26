@@ -117,11 +117,11 @@ proxies:
   udp: true
 
 # 锚点
-pr: &pr {type: select, proxies: [🛸 代理, 🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇸🇬 新加坡节点, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🌐 全部节点, 🚅 直连]}
+pr: &pr {type: select, proxies: [🛸 代理, 🇭🇰 香港节点, 📺 流媒体, 🇸🇬 新加坡节点, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🌐 全部节点, 🚅 直连]}
 
 # 策略组
 proxy-groups:
-  - {name: 🛸 代理, type: select, proxies: [🇭🇰 香港节点, 🇭🇰 香港流媒体, 🇸🇬 新加坡节点, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🌐 全部节点, 🚅 直连]}
+  - {name: 🛸 代理, type: select, proxies: [🇭🇰 香港节点, 📺 流媒体, 🇸🇬 新加坡节点, 🇺🇸 美国节点, 🇰🇷 韩国节点, 🇯🇵 日本节点, 🌐 全部节点, 🚅 直连]}
   - {name: 👀 Google,!!merge <<: *pr}
   - {name: 🤖 ChatGPT,!!merge <<: *pr}
   - {name: 🎵 TikTok,!!merge <<: *pr}
@@ -130,7 +130,7 @@ proxy-groups:
   - {name: 🎥 Disney,!!merge <<: *pr}
   - {name: 🚧 兜底,!!merge <<: *pr}
   - {name: 🇭🇰 香港节点, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
-  - {name: 🇭🇰 香港流媒体, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
+  - {name: 📺 流媒体, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong|新|sg|singapore"}
   - {name: 🇸🇬 新加坡节点, type: fallback, include-all: true, filter: "(?i)新|sg|singapore"}
   - {name: 🇰🇷 韩国节点, type: select, include-all: true, filter: "(?i)韩|kr|korea|seoul"}
   - {name: 🇯🇵 日本节点, type: select, include-all: true, filter: "(?i)日|jp|japan"}
