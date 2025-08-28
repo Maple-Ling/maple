@@ -1,1 +1,197 @@
+# 机场订阅
+proxy-providers:
+  良心云:
+    type: http
+    interval: 3600
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 60
+    proxy: 🚅 直连
+    url: ""
+    
+  院长:
+    type: http
+    interval: 3600
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 60
+    proxy: 🚅 直连
+    url: ""
 
+  地鼠云:
+    type: http
+    interval: 3600
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 60
+    proxy: 🚅 直连
+    url: ""
+
+
+# 全局设置
+allow-lan: true
+mode: rule
+log-level: warning         # 日志级别调整为 warning
+ipv6: false                # 禁用 IPv6，防止泄露
+find-process-mode: off
+profile:
+  store-selected: true
+  store-fake-ip: false     # 关闭 fake-ip
+
+unified-delay: true
+tcp-concurrent: true  # 启用TCP并发
+udp-concurrent: true  # 启用UDP并发
+tcp-fast-open: true
+global-client-fingerprint: chrome
+
+# 端口设置：全部采用 TPROXY 代理模式
+tproxy-port: 7893
+port: 7890
+socks-port: 7891
+redir-port: 7892
+mixed-port: 10801
+global-ua: clash.meta
+etag-support: true
+
+# Geo 数据（可按需更新）
+geodata-mode: false
+geodata-loader: memconservative
+geo-auto-update: false
+geo-update-interval: 24
+geox-url:
+  geoip: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
+  geosite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat"
+  mmdb: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb"
+
+# 外部控制面板（保持不变）
+external-controller: 0.0.0.0:9999
+secret: "188271"
+external-ui-name: Zashboard
+external-ui: ui
+external-ui-url: "https://github.com/Zephyruso/zashboard/archive/refs/heads/gh-pages.zip"
+
+# DNS 配置 —— 采用 redir-host 模式，增加 fallback 过滤防止 DNS 泄露
+dns:
+  enable: true
+  ipv6: false
+  listen: 0.0.0.0:53
+  enhanced-mode: redir-host
+  respect-dns-rules: true         # 明确开启规则尊重
+  default-nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  nameserver:
+    - 223.5.5.5
+    - 119.29.29.29
+  proxy-server-nameserver:        # 改为使用海外 DNS（例如 Google DNS）
+    - 8.8.8.8
+    - 8.8.4.4
+  nameserver-policy:
+    "rule-set:cn_domain,private_domain,rule-direct_domain":
+      - 223.5.5.5
+      - 119.29.29.29
+    "rule-set:geolocation-!cn,rule-proxy_domain":
+      - "https://dns.cloudflare.com/dns-query"
+      - "https://dns.google/dns-query"
+
+# TPROXY 相关（仅保留 TPROXY 部分，禁用 tun 模式）
+tun:
+  enable: false
+  # 以下 tun 参数不再生效，避免冲突
+  # stack: system
+  # dns-hijack:
+  #   - "any:53"
+  # auto-route: true
+  # auto-redirect: true
+  # auto-detect-interface: true
+
+# 流量嗅探设置：可根据实际情况调整
+sniffer:
+  enable: true
+  sniff:
+    TLS:
+      ports: [443, 8443]
+    HTTP:
+      ports: [80, 8080-8880]
+  skip-sni:
+    - "*.aliyun.com"
+    - "*.tencent.com"  # 跳过国内域名SNI嗅探
+
+# 代理节点
+proxies:
+- name: "🚅 直连"
+  type: direct
+  udp: true
+
+# 锚点
+pr: &pr {type: select, proxies: [🛸 代理, 📺 流媒体手动, 🇸🇬 新加坡自动, 🇸🇬 新加坡手动, 🇭🇰 香港自动, 🇭🇰 香港手动, 🇰🇷 韩国手动, 🇯🇵 日本手动, 🇺🇸 美国手动, 🚅 直连, 🌐 全部节点]}
+
+# 策略组
+proxy-groups:
+  - {name: 🛸 代理, type: select, proxies: [🇸🇬 新加坡自动, 🇸🇬 新加坡手动, 🇭🇰 香港自动, 🇭🇰 香港手动, 🇰🇷 韩国手动, 🇯🇵 日本手动, 🇺🇸 美国手动, 🚅 直连, 🌐 全部节点]}
+  - {name: 📺 流媒体手动, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong|新|sg|singapore"}
+  - {name: 🇸🇬 新加坡自动, type: url-test, tolerance: 20, include-all: true, filter: "(?i)新|sg|singapore"}
+  - {name: 🇸🇬 新加坡手动, type: select, include-all: true, filter: "(?i)新|sg|singapore"}
+  - {name: 🇭🇰 香港自动, type: url-test, tolerance: 20, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
+  - {name: 🇭🇰 香港手动, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
+  - {name: 🇰🇷 韩国手动, type: select, include-all: true, filter: "(?i)韩|kr|korea"}
+  - {name: 🇯🇵 日本手动, type: select, include-all: true, filter: "(?i)日|jp|japan"}
+  - {name: 🇺🇸 美国手动, type: select, include-all: true, filter: "(?i)美|us|united states"}
+  - {name: 🌐 其他手动, type: select, include-all: true, exclude-filter: "(?i)港|hk|hongkong|hong kong|新|sg|singapore|韩|kr|korea|日|jp|japan|美|us|united states|流量|套餐"}
+  - {name: 📲 Telegram,!!merge <<: *pr}
+  - {name: 👀 Google,!!merge <<: *pr}
+  - {name: 🤖 ChatGPT,!!merge <<: *pr}
+  - {name: 🎵 TikTok,!!merge <<: *pr}
+  - {name: 🎥 Netflix,!!merge <<: *pr}
+  - {name: 🎥 Disney,!!merge <<: *pr}
+  - {name: 🚧 兜底,!!merge <<: *pr}
+  - {name: 🌐 全部节点, type: select, include-all: true}
+
+# 规则部分（优化顺序）
+rules:
+  - RULE-SET,private_domain,🚅 直连
+  - RULE-SET,rule-direct_domain,🚅 直连
+
+  # 特定服务规则（优先处理）
+  - RULE-SET,tiktok_domain,🎵 TikTok
+  - RULE-SET,netflix_domain,🎥 Netflix
+  - RULE-SET,disney_domain,🎥 Disney
+  - RULE-SET,telegram_domain,📲 Telegram
+  - RULE-SET,openai,🤖 ChatGPT
+  - RULE-SET,google_domain,👀 Google
+  - RULE-SET,geolocation-!cn,🛸 代理
+  - RULE-SET,rule-proxy_domain,🛸 代理
+
+  # IP 规则（避免 DNS 解析冲突）
+  - RULE-SET,netflix_ip,🎥 Netflix,no-resolve
+  - RULE-SET,telegram_ip,📲 Telegram,no-resolve
+  - RULE-SET,google_ip,👀 Google,no-resolve
+
+  # 直连规则（放在后面，避免覆盖代理规则）
+  - RULE-SET,cn_domain,🚅 直连
+  - RULE-SET,cn_ip,🚅 直连
+
+  # 兜底规则（最后处理）
+  - MATCH,🚧 兜底
+
+# 规则提供者
+rule-providers:
+  rule-direct_domain: {type: http, interval: 86400, behavior: domain, format: text, url: "https://gh-proxy.com/https://raw.githubusercontent.com/Maple-Ling/maple/refs/heads/main/Mihomo/rule-direct.list"}
+  rule-proxy_domain: {type: http, interval: 86400, behavior: domain, format: text, url: "https://gh-proxy.com/https://raw.githubusercontent.com/Maple-Ling/maple/refs/heads/main/Mihomo/rule-proxy.list"}
+  openai: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/openai.mrs"}
+  private_domain: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
+  geolocation-!cn: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"}
+  google_domain: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/google.mrs"}
+  telegram_domain: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"}
+  netflix_domain: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.mrs"}
+  disney_domain: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/disney.mrs"}
+  tiktok_domain: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tiktok.mrs"}
+  cn_domain: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"}
+  cn_ip: {type: http, interval: 86400, behavior: ipcidr, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"}
+  private_ip: {type: http, interval: 86400, behavior: ipcidr, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/private.mrs"}
+  google_ip: {type: http, interval: 86400, behavior: ipcidr, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/google.mrs"}
+  telegram_ip: {type: http, interval: 86400, behavior: ipcidr, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/telegram.mrs"}
+  netflix_ip: {type: http, interval: 86400, behavior: ipcidr, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/netflix.mrs"}
