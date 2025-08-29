@@ -2,31 +2,31 @@
 proxy-providers:
   良心云:
     type: http
-    interval: 3600
+    interval: 86400
     health-check:
       enable: true
       url: https://www.gstatic.com/generate_204
-      interval: 60
+      interval: 86400
     proxy: 🚅 直连
     url: ""
     
   院长:
     type: http
-    interval: 3600
+    interval: 86400
     health-check:
       enable: true
       url: https://www.gstatic.com/generate_204
-      interval: 60
+      interval: 86400
     proxy: 🚅 直连
     url: ""
 
   地鼠云:
     type: http
-    interval: 3600
+    interval: 86400
     health-check:
       enable: true
       url: https://www.gstatic.com/generate_204
-      interval: 60
+      interval: 86400
     proxy: 🚅 直连
     url: ""
 
@@ -133,10 +133,10 @@ pr: &pr {type: select, proxies: [🛸 代理, 📺 流媒体手动, 🇸🇬 新
 proxy-groups:
   - {name: 🛸 代理, type: select, proxies: [🇸🇬 新加坡自动, 🇸🇬 新加坡手动, 🇭🇰 香港自动, 🇭🇰 香港手动, 🇰🇷 韩国手动, 🇯🇵 日本手动, 🇺🇸 美国手动, 🚅 直连, 🌐 全部节点]}
   - {name: 📺 流媒体手动, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong|新|sg|singapore"}
-  - {name: 🇸🇬 新加坡自动, type: url-test, tolerance: 20, include-all: true, filter: "(?i)新|sg|singapore"}
-  - {name: 🇸🇬 新加坡手动, type: select, include-all: true, filter: "(?i)新|sg|singapore"}
-  - {name: 🇭🇰 香港自动, type: url-test, tolerance: 20, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
-  - {name: 🇭🇰 香港手动, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
+  - {name: "🇸🇬 新加坡自动", type: url-test, include-all: true, filter: "(?i)新|sg|singapore", url: "https://www.gstatic.com/generate_204", interval: 60, tolerance: 20}
+  - {name: "🇸🇬 新加坡手动", type: select, include-all: true, filter: "(?i)新|sg|singapore"}
+  - {name: "🇭🇰 香港自动", type: url-test, include-all: true, filter: "(?i)港|hk|hongkong|hong kong", url: "https://www.gstatic.com/generate_204", interval: 60, tolerance: 20}
+  - {name: "🇭🇰 香港手动", type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
   - {name: 🇰🇷 韩国手动, type: select, include-all: true, filter: "(?i)韩|kr|korea"}
   - {name: 🇯🇵 日本手动, type: select, include-all: true, filter: "(?i)日|jp|japan"}
   - {name: 🇺🇸 美国手动, type: select, include-all: true, filter: "(?i)美|us|united states"}
