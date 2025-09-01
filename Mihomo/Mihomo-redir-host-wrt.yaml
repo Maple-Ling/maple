@@ -6,7 +6,7 @@ proxy-providers:
     health-check:
       enable: true
       url: https://www.gstatic.com/generate_204
-      interval: 86400
+      interval: 60
     proxy: 🚅 直连
     url: ""
     
@@ -16,7 +16,7 @@ proxy-providers:
     health-check:
       enable: true
       url: https://www.gstatic.com/generate_204
-      interval: 86400
+      interval: 60
     proxy: 🚅 直连
     url: ""
 
@@ -26,7 +26,7 @@ proxy-providers:
     health-check:
       enable: true
       url: https://www.gstatic.com/generate_204
-      interval: 86400
+      interval: 60
     proxy: 🚅 直连
     url: ""
 
@@ -133,9 +133,9 @@ pr: &pr {type: select, proxies: [🛸 代理, 📺 流媒体手动, 🇸🇬 新
 proxy-groups:
   - {name: 🛸 代理, type: select, proxies: [🇸🇬 新加坡自动, 🇸🇬 新加坡手动, 🇭🇰 香港自动, 🇭🇰 香港手动, 🇰🇷 韩国手动, 🇯🇵 日本手动, 🇺🇸 美国手动, 🚅 直连, 🌐 全部节点]}
   - {name: 📺 流媒体手动, type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong|新|sg|singapore"}
-  - {name: "🇸🇬 新加坡自动", type: url-test, include-all: true, filter: "(?i)新|sg|singapore", url: "https://www.gstatic.com/generate_204", interval: 60, tolerance: 20}
+  - {name: "🇸🇬 新加坡自动", type: fallback, include-all: true, filter: "(?i)新|sg|singapor"}
   - {name: "🇸🇬 新加坡手动", type: select, include-all: true, filter: "(?i)新|sg|singapore"}
-  - {name: "🇭🇰 香港自动", type: url-test, include-all: true, filter: "(?i)港|hk|hongkong|hong kong", url: "https://www.gstatic.com/generate_204", interval: 60, tolerance: 20}
+  - {name: "🇭🇰 香港自动", type: fallback, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
   - {name: "🇭🇰 香港手动", type: select, include-all: true, filter: "(?i)港|hk|hongkong|hong kong"}
   - {name: 🇰🇷 韩国手动, type: select, include-all: true, filter: "(?i)韩|kr|korea"}
   - {name: 🇯🇵 日本手动, type: select, include-all: true, filter: "(?i)日|jp|japan"}
@@ -143,6 +143,8 @@ proxy-groups:
   - {name: 🌐 其他手动, type: select, include-all: true, exclude-filter: "(?i)港|hk|hongkong|hong kong|新|sg|singapore|韩|kr|korea|日|jp|japan|美|us|united states|流量|套餐"}
   - {name: 📲 Telegram,!!merge <<: *pr}
   - {name: 👀 Google,!!merge <<: *pr}
+  - {name: 🎮 Steam,!!merge <<: *pr}
+  - {name: 🎮 腾讯游戏,!!merge <<: *pr}
   - {name: 🤖 ChatGPT,!!merge <<: *pr}
   - {name: 🎵 TikTok,!!merge <<: *pr}
   - {name: 🎥 Netflix,!!merge <<: *pr}
@@ -154,8 +156,10 @@ proxy-groups:
 rules:
   - RULE-SET,private_domain,🚅 直连
   - RULE-SET,rule-direct_domain,🚅 直连
-
+  - RULE-SET,tencent-games,🎮 腾讯游戏
+  
   # 特定服务规则（优先处理）
+  - RULE-SET,steam,🎮 Steam
   - RULE-SET,tiktok_domain,🎵 TikTok
   - RULE-SET,netflix_domain,🎥 Netflix
   - RULE-SET,disney_domain,🎥 Disney
@@ -182,6 +186,8 @@ rule-providers:
   rule-direct_domain: {type: http, interval: 86400, behavior: domain, format: text, url: "https://gh-proxy.com/https://raw.githubusercontent.com/Maple-Ling/maple/refs/heads/main/Mihomo/rule-direct.list"}
   rule-proxy_domain: {type: http, interval: 86400, behavior: domain, format: text, url: "https://gh-proxy.com/https://raw.githubusercontent.com/Maple-Ling/maple/refs/heads/main/Mihomo/rule-proxy.list"}
   openai: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/openai.mrs"}
+  steam: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/steam.mrs"}
+  tencent-games: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tencent-games.mrs"}
   private_domain: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"}
   geolocation-!cn: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"}
   google_domain: {type: http, interval: 86400, behavior: domain, format: mrs, url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/google.mrs"}
