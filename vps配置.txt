@@ -1,0 +1,129 @@
+更新软件库
+apt update -y && apt upgrade -y
+更新、安装必备软件
+apt install sudo curl wget nano
+将时区改为改成上海
+sudo timedatectl set-timezone Asia/Shanghai
+系统参数调优
+bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -t
+开启BBRX加速
+bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -x
+重启 VPS、使内核更新和BBR设置都生效
+sudo reboot
+如果你想确认 BBR 是否正确开启，可以使用下面的命令：
+lsmod | grep bbr
+开启BBR加速（备选）
+wget --no-check-certificate https://github.com/teddysun/across/raw/master/bbr.sh && chmod +x bbr.sh && ./bbr.sh
+swap这里我们用脚本来添加。
+wget -O swap.sh https://raw.githubusercontent.com/yuju520/Script/main/swap.sh && chmod +x swap.sh && clear && ./swap.sh
+查看当前内存
+free -m
+
+
+如果确实不需要IPv6，我们可以禁用IPv6
+执行命令：echo "1" > /proc/sys/net/ipv6/conf/all/disable_ipv6
+这样就掉了禁用ipv6，如需恢复的话删除掉 /proc/sys/net/ipv6/conf/all/disable_ipv6 这个文件就可以。
+
+一键脚本github地址
+https://github.com/yuju520/YujuToolBox
+准备安装curl
+apt update -y  && apt install -y curl
+或者
+apt update -y  && apt install -y wget
+用curl下载
+Yuju工具箱
+curl -sS -O https://raw.githubusercontent.com/yuju520/YujuToolBox/main/yuju.sh && chmod +x yuju.sh && ./yuju.sh
+用wget下载
+wget -q https://raw.githubusercontent.com/yuju520/YujuToolBox/main/yuju.sh && chmod +x yuju.sh && ./yuju.sh
+
+官网版
+curl -sS -O https://kejilion.pro/kejilion.sh && chmod +x kejilion.sh && ./kejilion.sh
+科技lionGitHub版
+curl -sS -O https://raw.githubusercontent.com/kejilion/sh/main/kejilion.sh && chmod +x kejilion.sh && ./kejilion.sh
+国内版
+curl -sS -O https://raw.gitmirror.com/kejilion/sh/main/cn/kejilion.sh && chmod +x kejilion.sh && ./kejilion.sh
+
+
+
+dns设置
+echo -e "nameserver 2001:4860:4860::8888" > /etc/resolv.conf
+echo -e "nameserver 8.8.8.8" > /etc/resolv.conf
+首先开放所有端口
+sudo ufw allow 1:65535/tcp
+sudo ufw allow 1:65535/udp
+sudo ufw enable
+添加v4出站
+warp go运行
+wget -N https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh && bash menu.sh [option] [lisence/url/token]
+3x-ui
+bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh) v2.3.11
+正版xui
+bash <(curl -Ls https://raw.githubusercontent.com/vaxilu/x-ui/master/install.sh) 
+安装X-UI
+bash <(curl -Ls https://raw.githubusercontent.com/FranzKafkaYu/x-ui/956bf85bbac978d56c0e319c5fac2d6db7df9564/install.sh) 0.3.4.4
+alph x-ui
+apk add curl&&apk add bash && bash <(curl -Ls https://raw.githubusercontent.com/Lynn-Becky/Alpine-x-ui/main/alpine-xui.sh)
+
+
+部署hy2
+wget -N --no-check-certificate https://raw.githubusercontent.com/flame1ce/hysteria2-install/main/hysteria2-install-main/hy2/hysteria.sh && bash hysteria.sh
+自启动hy2
+systemctl enable hysteria-server.service
+查看hy2启动状态
+systemctl status hysteria-server.service
+启动hy2
+systemctl start hysteria-server.service
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Alpine
+yuju工具箱
+curl -fsSL https://raw.githubusercontent.com/eooce/ssh_tool/main/ssh_tool.sh -o ssh_tool.sh && chmod +x ssh_tool.sh && ./ssh_tool.sh
+
+科技lion
+curl -sS -O https://kejilion.pro/kejilion.sh && chmod +x kejilion.sh && ./kejilion.sh
+
+文件打包
+cd到目录
+zip -r ../nezha.zip *
+传送文件
+scp -P 4721 /opt/nezha.zip root@77.90.0.56:/opt
+解压文件
+cd到目录
+sudo unzip nezha.zip
+
+部署hy2
+wget -N --no-check-certificate https://raw.githubusercontent.com/flame1ce/hysteria2-install/main/hysteria2-install-main/hy2/hysteria.sh && bash hysteria.sh
+自启动hy2
+systemctl enable hysteria-server.service
+查看hy2启动状态
+systemctl status hysteria-server.service
+启动hy2
+systemctl start hysteria-server.service
+
+
+dns设置
+echo -e "nameserver 2001:4860:4860::8888" > /etc/resolv.conf
+echo -e "nameserver 8.8.8.8" > /etc/resolv.conf
+echo -e "nameserver 2001:4860:4860::8888\nnameserver 8.8.8.8" > /etc/resolv.conf
+首先开放所有端口
+sudo ufw allow 1:65535/tcp
+sudo ufw allow 1:65535/udp
+sudo ufw enable
+
+alpinexui
+apk add curl&&apk add bash && bash <(curl -Ls https://raw.githubusercontent.com/Lynn-Becky/Alpine-x-ui/main/alpine-xui.sh)
+
+f大singbox
+bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-box.sh)
