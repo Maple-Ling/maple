@@ -1,3 +1,6 @@
+换源
+bash <(curl -sSL https://linuxmirrors.cn/main.sh)
+
 更新软件库
 apt update -y && apt upgrade -y
 更新、安装必备软件
