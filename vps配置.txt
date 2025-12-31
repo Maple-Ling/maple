@@ -130,3 +130,5 @@ apk add curl&&apk add bash && bash <(curl -Ls https://raw.githubusercontent.com/
 
 f大singbox
 bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-box.sh)
+
+bash <(wget -qO- -o- https://github.com/233boy/sing-box/raw/main/install.sh)
