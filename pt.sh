@@ -1,212 +1,194 @@
 #!/bin/bash
 
 # ==========================================
-# PT Seedbox 一键优化脚本
-# 支持：
+# PT Seedbox 一键优化脚本（完整版）
+# 特性：
+# - 菜单控制（不会自动执行）
+# - 环境检测
+# - sysctl冲突检测
 # - 内存分级优化
-# - sysctl (BT优化)
 # - 磁盘选择
-# - qBittorrent (Docker / nox)
+# - qB 安装 + 优化
 # ==========================================
 
-set -e
+# ========= 基础函数 =========
 
-# ---------- 颜色 ----------
-green(){ echo -e "\033[32m$1\033[0m"; }
-red(){ echo -e "\033[31m$1\033[0m"; }
-yellow(){ echo -e "\033[33m$1\033[0m"; }
+pause(){
+    read -p "按回车继续..." temp
+}
 
-# ---------- 检查root ----------
-if [ "$EUID" -ne 0 ]; then
-    red "请使用 root 运行"
-    exit 1
-fi
+get_mem_level(){
+    mem=$(free -m | awk '/Mem:/ {print $2}')
+    if [ "$mem" -le 1024 ]; then
+        level="low"
+    elif [ "$mem" -le 4096 ]; then
+        level="mid"
+    else
+        level="high"
+    fi
+    echo "检测内存: ${mem}MB -> 等级: $level"
+}
 
-# ---------- 获取内存 ----------
-mem_total=$(free -m | awk '/Mem:/ {print $2}')
+check_sysctl_conflict(){
+    echo "检测 sysctl 冲突..."
+    ls /etc/sysctl.d/
+    echo "⚠️ 如果存在多个优化文件，可能互相覆盖"
+}
 
-if [ "$mem_total" -le 1024 ]; then
-    profile="low"
-elif [ "$mem_total" -le 4096 ]; then
-    profile="mid"
-else
-    profile="high"
-fi
+# ========= 系统优化 =========
 
-green "检测到内存: ${mem_total}MB -> 使用配置: ${profile}"
-
-# ---------- 系统优化 ----------
 apply_sysctl(){
-    green "开始系统优化..."
+    get_mem_level
 
-cat > /etc/sysctl.d/99-pt.conf <<EOF
+    echo "写入 PT 优化配置..."
+
+    cat > /etc/sysctl.d/99-pt.conf <<EOF
 net.core.default_qdisc=fq
 net.ipv4.tcp_congestion_control=bbr
+
+net.core.rmem_max=8388608
+net.core.wmem_max=8388608
+net.ipv4.tcp_rmem=4096 87380 8388608
+net.ipv4.tcp_wmem=4096 65536 8388608
 
 net.core.somaxconn=8192
 net.core.netdev_max_backlog=16384
 
-net.ipv4.ip_local_port_range=10000 65535
+net.ipv4.tcp_max_syn_backlog=8192
 net.ipv4.tcp_fin_timeout=10
 net.ipv4.tcp_tw_reuse=1
-net.ipv4.tcp_max_tw_buckets=262144
-net.ipv4.tcp_max_orphans=65536
 
-net.netfilter.nf_conntrack_max=1048576
-net.netfilter.nf_conntrack_tcp_timeout_established=1200
+net.ipv4.ip_local_port_range=10000 65535
+
+fs.file-max=1048576
 EOF
 
-    if [ "$profile" == "low" ]; then
-cat >> /etc/sysctl.d/99-pt.conf <<EOF
-net.core.rmem_max=8388608
-net.core.wmem_max=8388608
-EOF
-
-    elif [ "$profile" == "mid" ]; then
-cat >> /etc/sysctl.d/99-pt.conf <<EOF
-net.core.rmem_max=16777216
-net.core.wmem_max=16777216
-EOF
-
-    else
-cat >> /etc/sysctl.d/99-pt.conf <<EOF
-net.core.rmem_max=33554432
-net.core.wmem_max=33554432
-EOF
-    fi
-
-    sysctl --system || red "sysctl 应用失败"
-    green "系统优化完成"
+    sysctl --system
+    echo "✅ 系统优化完成"
 }
 
-# ---------- 磁盘选择 ----------
+# ========= 磁盘 =========
+
 choose_disk(){
-    green "检测磁盘..."
+    echo "可用磁盘："
+    lsblk -dpno NAME,SIZE
 
-    lsblk -dpno NAME,SIZE | grep -v loop
-
-    read -p "输入磁盘 (如 /dev/vda)，直接回车使用默认路径: " disk
+    read -p "输入磁盘 (如 /dev/vda): " disk
 
     if [ -z "$disk" ]; then
-        mkdir -p /pt
-        path="/pt"
-    else
-        mkdir -p /pt
-        mount "$disk" /pt 2>/dev/null || yellow "挂载失败，使用默认目录"
-        path="/pt"
+        echo "未输入，跳过"
+        return
     fi
 
-    green "使用路径: $path"
+    mkdir -p /data
+    mount $disk /data
+
+    echo "✅ 已挂载到 /data"
 }
 
-# ---------- 安装 Docker ----------
-install_docker(){
-    if ! command -v docker &>/dev/null; then
-        green "安装 Docker..."
-        curl -fsSL https://get.docker.com | bash || {
-            red "Docker 安装失败"
-            return
-        }
-        systemctl enable docker
-        systemctl start docker
-    else
-        yellow "Docker 已安装"
-    fi
-}
+# ========= qB 安装 =========
 
-# ---------- Docker版 qB ----------
 install_qb_docker(){
-    install_docker
+    echo "安装 Docker + qBittorrent..."
 
-    docker rm -f qbittorrent 2>/dev/null || true
+    apt update
+    apt install -y docker.io
 
     docker run -d \
         --name qbittorrent \
+        -e PUID=0 \
+        -e PGID=0 \
+        -e WEBUI_PORT=8080 \
         -p 8080:8080 \
         -p 6881:6881 \
         -p 6881:6881/udp \
-        -v /pt:/downloads \
-        -v /root/qb:/config \
-        linuxserver/qbittorrent || red "Docker qB 启动失败"
+        -v /data:/data \
+        --restart unless-stopped \
+        linuxserver/qbittorrent
 
-    green "Docker qB 安装完成"
+    echo "✅ Docker qB 安装完成"
 }
 
-# ---------- nox版 ----------
 install_qb_nox(){
-    green "安装 qBittorrent-nox..."
+    echo "安装 qbittorrent-nox..."
 
     apt update
-    apt install -y qbittorrent-nox || {
-        red "安装失败"
-        return
-    }
+    apt install -y qbittorrent-nox
 
-cat > /etc/systemd/system/qbittorrent.service <<EOF
-[Unit]
-Description=qBittorrent
-After=network.target
+    qbittorrent-nox --daemon
 
-[Service]
-ExecStart=/usr/bin/qbittorrent-nox --webui-port=8080
-Restart=always
-User=root
-
-[Install]
-WantedBy=multi-user.target
-EOF
-
-    systemctl daemon-reexec
-    systemctl enable qbittorrent
-    systemctl restart qbittorrent
-
-    green "nox 启动完成"
+    echo "✅ qB nox 已启动 (默认8080)"
 }
 
-# ---------- qB 优化 ----------
+# ========= qB 优化 =========
+
 optimize_qb(){
-    green "写入 qB 配置..."
-
     conf="/root/.config/qBittorrent/qBittorrent.conf"
-    mkdir -p $(dirname "$conf")
 
-    if [ "$profile" == "low" ]; then
-        max_conn=800
-    elif [ "$profile" == "mid" ]; then
-        max_conn=1500
-    else
-        max_conn=3000
-    fi
+    mkdir -p /root/.config/qBittorrent/
 
-cat > "$conf" <<EOF
+    cat > $conf <<EOF
 [Preferences]
-Connection\\GlobalDLLimitAlt=0
-Connection\\GlobalUPLimitAlt=0
-Connection\\MaxConnections=$max_conn
-Connection\\MaxConnectionsPerTorrent=300
-Connection\\MaxUploads=200
-Connection\\MaxUploadsPerTorrent=50
-Downloads\\SavePath=/pt/
+Connection\GlobalDLLimitAlt=0
+Connection\GlobalUPLimitAlt=0
+Connection\MaxConnections=1000
+Connection\MaxConnectionsPerTorrent=200
+Connection\MaxUploads=50
+Connection\MaxUploadsPerTorrent=20
+Connection\PortRangeMin=6881
+Downloads\DiskWriteCacheSize=64
+Downloads\PreAllocation=false
+Queueing\QueueingEnabled=false
 EOF
 
-    green "qB 优化完成"
+    echo "✅ qB 优化完成"
 }
 
-# ---------- 主流程 ----------
-apply_sysctl
-choose_disk
+# ========= 一键 =========
 
-echo "选择安装方式:"
-echo "1. Docker 版 qB"
-echo "2. nox 版 (低内存推荐)"
-read -p "输入选项: " opt
-
-if [ "$opt" == "1" ]; then
+run_all(){
+    apply_sysctl
+    choose_disk
     install_qb_docker
-else
-    install_qb_nox
-fi
+    optimize_qb
+}
 
-optimize_qb
+# ========= 主菜单 =========
 
-green "全部完成 ✔"
+main_menu(){
+    clear
+    echo "=============================="
+    echo "   PT 刷流一键工具（完整版）"
+    echo "=============================="
+    echo "1. 环境检测"
+    echo "2. 系统优化"
+    echo "3. 磁盘挂载"
+    echo "4. 安装 qB (Docker)"
+    echo "5. 安装 qB (nox)"
+    echo "6. qB 优化"
+    echo "7. 一键全部执行"
+    echo "0. 退出"
+    echo "=============================="
+
+    read -p "请选择: " num
+
+    case "$num" in
+        1)
+            get_mem_level
+            check_sysctl_conflict
+            ;;
+        2) apply_sysctl ;;
+        3) choose_disk ;;
+        4) install_qb_docker ;;
+        5) install_qb_nox ;;
+        6) optimize_qb ;;
+        7) run_all ;;
+        0) exit 0 ;;
+        *) echo "无效选项" ;;
+    esac
+
+    pause
+    main_menu
+}
+
+main_menu
