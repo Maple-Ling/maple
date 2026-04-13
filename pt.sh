@@ -210,7 +210,7 @@ esac
 # =============================
 qb_install() {
 mkdir -p $QB_PATH
-wget -O $QB_BIN "你的下载链接"
+wget -O $QB_BIN "https://release-assets.githubusercontent.com/github-production-release-asset/528839340/324118aa-3f48-437f-aadb-20614bc01c9f?sp=r&sv=2018-11-09&sr=b&spr=https&se=2026-04-13T16%3A46%3A47Z&rscd=attachment%3B+filename%3Dx86_64-qbittorrent-nox&rsct=application%2Foctet-stream&skoid=96c2d410-5711-43a1-aedd-ab1947aa7ab0&sktid=398a6654-997b-47e9-b12b-9515b896b4de&skt=2026-04-13T15%3A46%3A00Z&ske=2026-04-13T16%3A46%3A47Z&sks=b&skv=2018-11-09&sig=305tnoxSNhKMK7w85b90Ns4QwX%2BePuQzVcQZ4MRXLVE%3D&jwt=eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJnaXRodWIuY29tIiwiYXVkIjoicmVsZWFzZS1hc3NldHMuZ2l0aHVidXNlcmNvbnRlbnQuY29tIiwia2V5Ijoia2V5MSIsImV4cCI6MTc3NjA5NzE4OSwibmJmIjoxNzc2MDk1Mzg5LCJwYXRoIjoicmVsZWFzZWFzc2V0cHJvZHVjdGlvbi5ibG9iLmNvcmUud2luZG93cy5uZXQifQ.-sJUxtwDVsUMy3MFykt1OeFfY8ECv7W_7MLYUnIZ_ss&response-content-disposition=attachment%3B%20filename%3Dx86_64-qbittorrent-nox&response-content-type=application%2Foctet-stream"
 chmod +x $QB_BIN
 
 cat > $QB_SERVICE <<EOF
