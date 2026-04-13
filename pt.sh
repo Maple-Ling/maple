@@ -20,7 +20,6 @@ echo -e "${c1}╔═════════════════════
 printf "${c1}║ %-30s ║${n}\n" "$1"
 echo -e "${c1}╚════════════════════════════════╝${n}"
 }
-
 line(){ echo -e "${c1}══════════════════════════════════${n}"; }
 pause(){ read -p "按回车继续..."; }
 
@@ -45,7 +44,6 @@ done < $CONFIG_FILE
 # ===== PT优化 =====
 pt_opt(){
 box "🚀 PT刷流优化"
-
 cat > $CONFIG_FILE <<EOF
 net.core.default_qdisc=fq
 net.core.netdev_max_backlog=100000
@@ -55,7 +53,6 @@ net.ipv4.ip_local_port_range=10000 65535
 fs.file-max=4194304
 vm.swappiness=10
 EOF
-
 set_cc
 apply_sysctl
 echo -e "${c2}✔ 完成${n}"
@@ -64,7 +61,6 @@ echo -e "${c2}✔ 完成${n}"
 # ===== VLESS优化 =====
 vless_opt(){
 box "⚡ VLESS优化"
-
 cat > $CONFIG_FILE <<EOF
 net.core.default_qdisc=fq
 net.core.netdev_max_backlog=20000
@@ -72,24 +68,21 @@ net.core.somaxconn=20000
 net.ipv4.tcp_fastopen=3
 net.ipv4.tcp_mtu_probing=1
 EOF
-
 set_cc
 apply_sysctl
 echo -e "${c2}✔ 完成${n}"
 }
 
-# ===== qB 控制 =====
+# ===== qB控制 =====
 qb_stop(){
-echo -e "${c3}停止 qB${n}"
 systemctl stop qbittorrent-nox 2>/dev/null
 pkill -9 qbittorrent-nox 2>/dev/null
 sleep 2
 }
 
 qb_start(){
-echo -e "${c3}启动 qB${n}"
 systemctl start qbittorrent-nox
-sleep 5
+sleep 6
 }
 
 qb_login(){
@@ -98,15 +91,14 @@ curl -s -c $COOKIE \
 $QB_URL/api/v2/auth/login > /dev/null
 }
 
-# ===== 核心优化（最终稳定版）=====
+# ===== 核心优化 =====
 qb_optimize(){
 
-# ===== 第一步：停掉 =====
 qb_stop
 
-# ===== 第二步：写死配置（关键）=====
 mkdir -p /pt/qBittorrent/config
 
+# 🔥 写死基础配置（关键）
 cat > $QB_CONF <<EOF
 [Preferences]
 General\\Locale=zh
@@ -121,6 +113,9 @@ Bittorrent\\DHT=false
 Bittorrent\\PeX=false
 Bittorrent\\LSD=false
 Advanced\\AnonymousMode=true
+Advanced\\trackerPort=-1
+
+Session\\DisableAutoTMMByDefault=false
 
 WebUI\\Address=*
 WebUI\\Port=8080
@@ -128,62 +123,40 @@ WebUI\\CSRFProtection=false
 WebUI\\ClickjackingProtection=false
 EOF
 
-# ===== 第三步：启动 =====
 qb_start
-
-# ===== 第四步：动态优化 =====
 qb_login
 
 RAM=$(free -m | awk '/Mem:/ {print $2}')
 CPU=$(nproc)
 
-# ===== 磁盘缓存 =====
-if [ $RAM -le 1024 ]; then
-    cache=128
-elif [ $RAM -le 2048 ]; then
-    cache=256
-elif [ $RAM -le 4096 ]; then
-    cache=384
-else
-    cache=512
-fi
+# ===== 融合计算 =====
+if [ $RAM -le 1024 ]; then cache=128
+elif [ $RAM -le 2048 ]; then cache=256
+elif [ $RAM -le 4096 ]; then cache=384
+else cache=512; fi
 
-write=$((cache / 4))
+write=$((cache/4))
 
-# ===== AIO =====
-if [ $CPU -le 1 ]; then
-    aio=8
-elif [ $CPU -le 2 ]; then
-    aio=12
-elif [ $CPU -le 4 ]; then
-    aio=16
-else
-    aio=32
-fi
+if [ $CPU -le 1 ]; then aio=8
+elif [ $CPU -le 2 ]; then aio=12
+elif [ $CPU -le 4 ]; then aio=16
+else aio=32; fi
 
-# ===== 连接 =====
-qb_mem=$((RAM * 70 / 100))
-mem_conn=$((qb_mem / 2))
-cpu_conn=$((CPU * 800))
-
+qb_mem=$((RAM*70/100))
+mem_conn=$((qb_mem/2))
+cpu_conn=$((CPU*800))
 max_conn=$(( mem_conn < cpu_conn ? mem_conn : cpu_conn ))
-max_conn=$((max_conn * 80 / 100))
-per_conn=$((max_conn / 8))
+max_conn=$((max_conn*80/100))
+per_conn=$((max_conn/8))
 
-# ===== 上传 =====
-upload=$((CPU * 20))
-upload_t=$((CPU * 5))
+upload=$((CPU*20))
+upload_t=$((CPU*5))
 
-# ===== 发送缓冲 =====
-if [ $CPU -le 1 ]; then
-    buf=2048
-elif [ $CPU -le 2 ]; then
-    buf=4096
-else
-    buf=8192
-fi
+if [ $CPU -le 1 ]; then buf=2048
+elif [ $CPU -le 2 ]; then buf=4096
+else buf=8192; fi
 
-buf_low=$((buf / 2))
+buf_low=$((buf/2))
 
 mkdir -p /pt/downloads
 
@@ -196,7 +169,7 @@ echo "缓冲: $buf / $buf_low"
 echo "AIO: $aio"
 line
 
-# ===== API写性能参数 =====
+# 🔥 写性能参数
 curl -s -b $COOKIE --data-urlencode "json={
 \"max_connec\":$max_conn,
 \"max_connec_per_torrent\":$per_conn,
@@ -206,16 +179,27 @@ curl -s -b $COOKIE --data-urlencode "json={
 \"send_buffer_watermark\":$buf,
 \"send_buffer_low_watermark\":$buf_low,
 \"async_io_threads\":$aio,
-\"auto_tmm_enabled\":true
+\"auto_tmm_enabled\":true,
+\"enable_dht\":false,
+\"enable_pex\":false,
+\"enable_lsd\":false
 }" $QB_URL/api/v2/app/setPreferences >/dev/null
 
-echo -e "${c2}✔ 优化完成（最终稳定版）${n}"
+sleep 3
+
+# 🔥 再锁一次（绝杀）
+curl -s -b $COOKIE --data-urlencode "json={
+\"enable_dht\":false,
+\"enable_pex\":false,
+\"enable_lsd\":false
+}" $QB_URL/api/v2/app/setPreferences >/dev/null
+
+echo -e "${c2}✔ 优化完成（最终版）${n}"
 }
 
 # ===== 安装 =====
 qb_install(){
 box "📦 安装 qB"
-
 mkdir -p $QB_PATH
 
 wget -O $QB_BIN https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.3.9_v1.2.15/x86_64-qbittorrent-nox
@@ -251,15 +235,15 @@ qb_uninstall(){
 qb_stop
 systemctl disable qbittorrent-nox
 rm -f $QB_BIN $QB_SERVICE
+rm -rf /pt/qBittorrent
 systemctl daemon-reload
-echo -e "${c2}✔ 已卸载${n}"
+echo -e "${c2}✔ 已彻底卸载${n}"
 }
 
-# ===== qB菜单 =====
+# ===== 菜单 =====
 qb_menu(){
 clear
 box "📦 qB管理"
-
 echo "1. 安装 + 优化"
 echo "2. 重新优化"
 echo "3. 启动"
@@ -267,9 +251,7 @@ echo "4. 停止"
 echo "5. 卸载"
 echo "0. 返回"
 line
-
 read -p "选择: " n
-
 case $n in
 1) qb_install ;;
 2) qb_optimize ;;
@@ -278,31 +260,25 @@ case $n in
 5) qb_uninstall ;;
 0) return ;;
 esac
-
 pause
 qb_menu
 }
 
-# ===== 主菜单 =====
 main_menu(){
 clear
 box "🚀 Linux终极控制面板"
-
 echo "1. 🚀 PT优化"
 echo "2. ⚡ VLESS优化"
 echo "3. 📦 qB管理"
 echo "0. ❌ 退出"
 line
-
 read -p "选择: " n
-
 case $n in
 1) pt_opt ;;
 2) vless_opt ;;
 3) qb_menu ;;
 0) exit ;;
 esac
-
 pause
 main_menu
 }
