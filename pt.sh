@@ -23,13 +23,14 @@ echo -e "${c1}╚═════════════════════
 line(){ echo -e "${c1}══════════════════════════════════${n}"; }
 pause(){ read -p "按回车继续..."; }
 
-# ===== BBR =====
+# ===== BBR自动 =====
 set_cc(){
 avail=$(sysctl -n net.ipv4.tcp_available_congestion_control)
 for i in bbr3 bbr2 bbrplus bbr
 do
-echo $avail | grep -q $i && sysctl -w net.ipv4.tcp_congestion_control=$i >/dev/null && return
+echo $avail | grep -q $i && sysctl -w net.ipv4.tcp_congestion_control=$i >/dev/null && echo "👉 使用 $i" && return
 done
+echo "👉 使用 cubic"
 }
 
 apply_sysctl(){
@@ -42,7 +43,7 @@ done < $CONFIG_FILE
 
 # ===== PT优化 =====
 pt_opt(){
-box "🚀 PT优化"
+box "🚀 PT刷流优化"
 
 cat > $CONFIG_FILE <<EOF
 net.core.default_qdisc=fq
@@ -56,7 +57,6 @@ EOF
 
 set_cc
 apply_sysctl
-
 echo -e "${c2}✔ 完成${n}"
 }
 
@@ -74,11 +74,10 @@ EOF
 
 set_cc
 apply_sysctl
-
 echo -e "${c2}✔ 完成${n}"
 }
 
-# ===== qB 控制 =====
+# ===== qB控制 =====
 qb_stop(){
 echo -e "${c3}停止 qB${n}"
 systemctl stop qbittorrent-nox 2>/dev/null
@@ -90,6 +89,15 @@ qb_start(){
 echo -e "${c3}启动 qB${n}"
 systemctl start qbittorrent-nox
 sleep 3
+
+# ===== 启动后强制锁配置 =====
+qb_login
+curl -s -b $COOKIE --data-urlencode "json={
+\"enable_dht\":false,
+\"enable_pex\":false,
+\"enable_lsd\":false,
+\"anonymous_mode\":true
+}" $QB_URL/api/v2/app/setPreferences >/dev/null
 }
 
 qb_login(){
@@ -98,7 +106,7 @@ curl -s -c $COOKIE \
 $QB_URL/api/v2/auth/login > /dev/null
 }
 
-# ===== 核心优化（最终稳定版）=====
+# ===== 核心优化 =====
 qb_optimize(){
 
 qb_start
@@ -107,10 +115,7 @@ qb_login
 RAM=$(free -m | awk '/Mem:/ {print $2}')
 CPU=$(nproc)
 
-# ===== 内存安全 =====
-qb_mem=$((RAM * 70 / 100))
-
-# ===== 磁盘缓存（修复版）=====
+# ===== 磁盘缓存（稳定版）=====
 if [ $RAM -le 1024 ]; then
     cache=128
 elif [ $RAM -le 2048 ]; then
@@ -123,7 +128,7 @@ fi
 
 write=$((cache / 4))
 
-# ===== AIO线程 =====
+# ===== AIO =====
 if [ $CPU -le 1 ]; then
     aio=8
 elif [ $CPU -le 2 ]; then
@@ -134,20 +139,20 @@ else
     aio=32
 fi
 
-# ===== 连接数（安全模型）=====
+# ===== 连接数 =====
+qb_mem=$((RAM * 70 / 100))
 mem_conn=$((qb_mem / 2))
 cpu_conn=$((CPU * 800))
 
 max_conn=$(( mem_conn < cpu_conn ? mem_conn : cpu_conn ))
 max_conn=$((max_conn * 80 / 100))
-
 per_conn=$((max_conn / 8))
 
 # ===== 上传 =====
 upload=$((CPU * 20))
 upload_t=$((CPU * 5))
 
-# ===== 发送缓冲（修复版）=====
+# ===== 发送缓冲 =====
 if [ $CPU -le 1 ]; then
     buf=2048
 elif [ $CPU -le 2 ]; then
@@ -169,9 +174,8 @@ echo "缓冲: $buf / $buf_low"
 echo "AIO: $aio"
 line
 
-# ===== API写入 =====
-curl -s -b $COOKIE \
---data-urlencode "json={
+# ===== 写配置 =====
+curl -s -b $COOKIE --data-urlencode "json={
 \"locale\":\"zh\",
 \"save_path\":\"/pt/downloads\",
 \"max_connec\":$max_conn,
@@ -186,17 +190,23 @@ curl -s -b $COOKIE \
 \"anonymous_mode\":true,
 \"queueing_enabled\":false,
 \"disk_cache\":$cache,
-\"disk_cache_ttl\":60,
 \"send_buffer_watermark\":$buf,
 \"send_buffer_low_watermark\":$buf_low,
 \"async_io_threads\":$aio,
 \"web_ui_csrf_protection_enabled\":false,
 \"web_ui_clickjacking_protection_enabled\":false,
 \"auto_tmm_enabled\":true
-}" \
-$QB_URL/api/v2/app/setPreferences > /dev/null
+}" $QB_URL/api/v2/app/setPreferences >/dev/null
 
-echo -e "${c2}✔ 优化完成（稳定压榨）${n}"
+# ===== 再锁一次（防反弹）=====
+sleep 2
+curl -s -b $COOKIE --data-urlencode "json={
+\"enable_dht\":false,
+\"enable_pex\":false,
+\"enable_lsd\":false
+}" $QB_URL/api/v2/app/setPreferences >/dev/null
+
+echo -e "${c2}✔ 优化完成${n}"
 }
 
 # ===== 安装 =====
