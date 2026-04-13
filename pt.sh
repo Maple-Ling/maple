@@ -1,62 +1,45 @@
 #!/bin/bash
 
-CONFIG_FILE="/etc/sysctl.d/99-auto-opt.conf"
+QB_URL="http://127.0.0.1:8080"
+QB_USER="admin"
+QB_PASS="adminadmin"
+COOKIE="/tmp/qb_cookie.txt"
 
 QB_PATH="/pt"
 QB_BIN="$QB_PATH/qbittorrent-nox"
-QB_CONF_DIR="/pt/qBittorrent/config"
-QB_CONF="$QB_CONF_DIR/qBittorrent.conf"
 QB_SERVICE="/etc/systemd/system/qbittorrent-nox.service"
+CONFIG_FILE="/etc/sysctl.d/99-auto-opt.conf"
 
-G="\033[1;32m"; R="\033[1;31m"; Y="\033[1;33m"; B="\033[1;36m"; N="\033[0m"
+# ===== UI =====
 
-line(){ echo -e "${B}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${N}"; }
-pause(){ read -p "按回车继续..."; }
+c1="\033[1;36m"
+c2="\033[1;32m"
+c3="\033[1;33m"
+c4="\033[1;31m"
+n="\033[0m"
 
-# ======================
-# 主菜单
-# ======================
-
-main_menu(){
-clear
-echo -e "${B}"
-echo "╔══════════════════════════════╗"
-echo "║   🚀 Linux 全能优化面板     ║"
-echo "╚══════════════════════════════╝"
-echo -e "${N}"
-
-line
-echo "1. 🚀 PT刷流优化"
-echo "2. ⚡ VLESS优化"
-echo "3. 📦 qBittorrent管理"
-echo "0. ❌ 退出"
-line
-
-read -p "选择: " c
-
-case $c in
-1) pt_opt ;;
-2) vless_opt ;;
-3) qb_menu ;;
-0) exit ;;
-*) echo -e "${R}输入错误${N}" ;;
-esac
-
-pause
-main_menu
+box(){
+echo -e "${c1}╔════════════════════════════════╗${n}"
+echo -e "${c1}║        $1        ║${n}"
+echo -e "${c1}╚════════════════════════════════╝${n}"
 }
 
-# ======================
-# BBR自动选择
-# ======================
+line(){
+echo -e "${c1}══════════════════════════════════${n}"
+}
+
+pause(){
+read -p "按回车继续..."
+}
+
+# ===== 系统优化 =====
 
 set_cc(){
 avail=$(sysctl -n net.ipv4.tcp_available_congestion_control)
 for i in bbr3 bbr2 bbrplus bbr
 do
-echo $avail | grep -q $i && sysctl -w net.ipv4.tcp_congestion_control=$i >/dev/null && echo "👉 使用 $i" && return
+echo $avail | grep -q $i && sysctl -w net.ipv4.tcp_congestion_control=$i >/dev/null && return
 done
-echo "👉 使用 cubic"
 }
 
 apply_sysctl(){
@@ -68,13 +51,8 @@ sysctl -w "$k=$v" >/dev/null
 done < $CONFIG_FILE
 }
 
-# ======================
-# PT优化
-# ======================
-
 pt_opt(){
-echo "🚀 PT优化"
-
+box "🚀 PT刷流优化"
 cat > $CONFIG_FILE <<EOF
 net.core.default_qdisc=fq
 net.core.netdev_max_backlog=100000
@@ -82,68 +60,54 @@ net.core.somaxconn=65535
 net.ipv4.tcp_max_syn_backlog=65535
 fs.file-max=4194304
 EOF
-
 set_cc
 apply_sysctl
-echo "✔ 完成"
+echo -e "${c2}✔ 完成${n}"
 }
 
-# ======================
-# VLESS优化
-# ======================
-
 vless_opt(){
-echo "⚡ VLESS优化"
-
+box "⚡ VLESS优化"
 cat > $CONFIG_FILE <<EOF
 net.core.default_qdisc=fq
 net.core.netdev_max_backlog=20000
 net.core.somaxconn=20000
 net.ipv4.tcp_fastopen=3
 EOF
-
 set_cc
 apply_sysctl
-echo "✔ 完成"
+echo -e "${c2}✔ 完成${n}"
 }
 
-# ======================
-# qB 控制
-# ======================
+# ===== qB 控制 =====
 
 qb_stop(){
-echo "🛑 停止 qB"
+echo -e "${c3}停止 qB...${n}"
 systemctl stop qbittorrent-nox 2>/dev/null
 pkill -9 qbittorrent-nox 2>/dev/null
-sleep 1
+sleep 2
 }
 
 qb_start(){
+echo -e "${c3}启动 qB...${n}"
 systemctl start qbittorrent-nox
-sleep 2
-pgrep qbittorrent-nox >/dev/null && echo "✔ 已启动" || echo "❌ 启动失败"
+sleep 3
 }
 
-qb_restart(){
-qb_stop
-qb_start
+qb_login(){
+curl -s -c $COOKIE \
+--data "username=$QB_USER&password=$QB_PASS" \
+$QB_URL/api/v2/auth/login > /dev/null
 }
 
-# ======================
-# qB 核心优化（最终版）
-# ======================
+# ===== 核心优化（API）=====
 
 qb_optimize(){
 
-qb_stop
-
-mkdir -p /pt/downloads
-mkdir -p $QB_CONF_DIR
+qb_start
+qb_login
 
 RAM=$(free -m | awk '/Mem:/ {print $2}')
 CPU=$(nproc)
-
-# ===== 统一资源模型 =====
 
 mem_limit=$(awk "BEGIN{printf \"%d\", $RAM*0.6}")
 cpu_limit=$((CPU*1200))
@@ -162,75 +126,48 @@ buf_low=$((buf/2))
 
 aio=$((CPU*2))
 
-# ===== 输出 =====
+mkdir -p /pt/downloads
 
-echo "================================"
-echo "👉 内存: ${RAM}MB"
-echo "👉 CPU: ${CPU}"
-echo "👉 全局连接: $max_conn"
-echo "👉 单种连接: $per_conn"
-echo "👉 上传槽: $upload / $upload_t"
-echo "👉 磁盘缓存: $cache"
-echo "👉 写缓存: $write"
-echo "👉 缓冲: $buf / $buf_low"
-echo "👉 AIO线程: $aio"
-echo "================================"
+line
+echo -e "${c2}内存:${RAM}MB CPU:${CPU}${n}"
+echo -e "连接: $max_conn / $per_conn"
+echo -e "上传: $upload / $upload_t"
+echo -e "缓存: $cache / $write"
+echo -e "缓冲: $buf / $buf_low"
+line
 
-# ===== 写完整配置（防覆盖）=====
+curl -s -b $COOKIE \
+--data-urlencode "json={
+\"locale\":\"zh\",
+\"save_path\":\"/pt/downloads\",
+\"max_connec\":$max_conn,
+\"max_connec_per_torrent\":$per_conn,
+\"max_uploads\":$upload,
+\"max_uploads_per_torrent\":$upload_t,
+\"listen_port\":57777,
+\"upnp\":false,
+\"enable_dht\":false,
+\"enable_pex\":false,
+\"enable_lsd\":false,
+\"anonymous_mode\":true,
+\"queueing_enabled\":false,
+\"disk_cache\":$cache,
+\"send_buffer_watermark\":$buf,
+\"send_buffer_low_watermark\":$buf_low,
+\"async_io_threads\":$aio,
+\"web_ui_csrf_protection_enabled\":false,
+\"web_ui_clickjacking_protection_enabled\":false,
+\"auto_tmm_enabled\":true
+}" \
+$QB_URL/api/v2/app/setPreferences > /dev/null
 
-cat > $QB_CONF <<EOF
-[Preferences]
-
-General\\Locale=zh
-Downloads\\SavePath=/pt/downloads
-
-Connection\\PortRangeMin=57777
-Connection\\MaxConnections=$max_conn
-Connection\\MaxConnectionsPerTorrent=$per_conn
-Connection\\MaxUploads=$upload
-Connection\\MaxUploadsPerTorrent=$upload_t
-Connection\\GlobalDLLimit=-1
-Connection\\GlobalUPLimit=-1
-Connection\\GlobalDLLimitAlt=-1
-Connection\\GlobalUPLimitAlt=-1
-
-Connection\\UPnP=false
-
-Queueing\\QueueingEnabled=false
-
-Bittorrent\\DHT=false
-Bittorrent\\PeX=false
-Bittorrent\\LSD=false
-Advanced\\AnonymousMode=true
-
-WebUI\\Address=*
-WebUI\\Port=8080
-WebUI\\CSRFProtection=false
-WebUI\\ClickjackingProtection=false
-
-Session\\DiskCacheSize=$cache
-Downloads\\DiskWriteCacheSize=$write
-Session\\DiskCacheTTL=60
-
-[BitTorrent]
-Session\\AsyncIOThreadsCount=$aio
-
-[Session]
-Session\\SendBufferWatermark=$buf
-Session\\SendBufferLowWatermark=$buf_low
-Session\\SendBufferWatermarkFactor=150
-EOF
-
-qb_start
-
-echo "✔ qB 优化完成（完全自适应）"
+echo -e "${c2}✔ 优化完成${n}"
 }
 
-# ======================
-# 安装
-# ======================
+# ===== 安装 =====
 
 qb_install(){
+box "📦 安装 qBittorrent"
 
 mkdir -p $QB_PATH
 
@@ -246,7 +183,6 @@ After=network.target
 [Service]
 ExecStart=$QB_BIN --profile=/pt
 Restart=always
-KillMode=control-group
 
 [Install]
 WantedBy=multi-user.target
@@ -261,45 +197,69 @@ pkill qbittorrent-nox
 
 qb_optimize
 
-echo "✔ 安装完成"
+echo -e "${c2}✔ 安装完成${n}"
 }
 
 qb_uninstall(){
 qb_stop
-systemctl disable qbittorrent-nox 2>/dev/null
+systemctl disable qbittorrent-nox
 rm -f $QB_BIN $QB_SERVICE
 systemctl daemon-reload
-echo "✔ 已卸载"
+echo -e "${c2}✔ 已卸载${n}"
 }
 
-# ======================
-# qB菜单
-# ======================
+# ===== qB菜单 =====
 
 qb_menu(){
 clear
-echo "╔════════ qB 管理 ════════╗"
+box "📦 qB 管理"
+
 echo "1. 安装 + 优化"
-echo "2. 卸载"
+echo "2. 重新优化"
 echo "3. 启动"
 echo "4. 停止"
-echo "5. 重启"
-echo "6. 重新优化"
+echo "5. 卸载"
 echo "0. 返回"
 line
 
-read -p "选择: " q
+read -p "选择: " n
 
-case $q in
+case $n in
 1) qb_install ;;
-2) qb_uninstall ;;
+2) qb_optimize ;;
 3) qb_start ;;
 4) qb_stop ;;
-5) qb_restart ;;
-6) qb_optimize ;;
+5) qb_uninstall ;;
 0) return ;;
-*) echo "错误" ;;
 esac
+
+pause
+qb_menu
+}
+
+# ===== 主菜单 =====
+
+main_menu(){
+clear
+box "🚀 Linux 终极控制面板"
+
+echo "1. 🚀 PT优化"
+echo "2. ⚡ VLESS优化"
+echo "3. 📦 qB管理"
+echo "0. ❌ 退出"
+line
+
+read -p "选择: " n
+
+case $n in
+1) pt_opt ;;
+2) vless_opt ;;
+3) qb_menu ;;
+0) exit ;;
+esac
+
+pause
+main_menu
 }
 
 main_menu
