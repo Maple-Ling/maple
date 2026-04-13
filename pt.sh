@@ -7,6 +7,7 @@ COOKIE="/tmp/qb_cookie.txt"
 
 QB_PATH="/pt"
 QB_BIN="$QB_PATH/qbittorrent-nox"
+QB_CONF="/pt/qBittorrent/config/qBittorrent.conf"
 QB_SERVICE="/etc/systemd/system/qbittorrent-nox.service"
 
 CONFIG_FILE="/etc/sysctl.d/99-auto-opt.conf"
@@ -23,7 +24,7 @@ echo -e "${c1}╚═════════════════════
 line(){ echo -e "${c1}══════════════════════════════════${n}"; }
 pause(){ read -p "按回车继续..."; }
 
-# ===== BBR自动 =====
+# ===== BBR =====
 set_cc(){
 avail=$(sysctl -n net.ipv4.tcp_available_congestion_control)
 for i in bbr3 bbr2 bbrplus bbr
@@ -77,7 +78,7 @@ apply_sysctl
 echo -e "${c2}✔ 完成${n}"
 }
 
-# ===== qB控制 =====
+# ===== qB 控制 =====
 qb_stop(){
 echo -e "${c3}停止 qB${n}"
 systemctl stop qbittorrent-nox 2>/dev/null
@@ -88,16 +89,7 @@ sleep 2
 qb_start(){
 echo -e "${c3}启动 qB${n}"
 systemctl start qbittorrent-nox
-sleep 3
-
-# ===== 启动后强制锁配置 =====
-qb_login
-curl -s -b $COOKIE --data-urlencode "json={
-\"enable_dht\":false,
-\"enable_pex\":false,
-\"enable_lsd\":false,
-\"anonymous_mode\":true
-}" $QB_URL/api/v2/app/setPreferences >/dev/null
+sleep 5
 }
 
 qb_login(){
@@ -106,16 +98,46 @@ curl -s -c $COOKIE \
 $QB_URL/api/v2/auth/login > /dev/null
 }
 
-# ===== 核心优化 =====
+# ===== 核心优化（最终稳定版）=====
 qb_optimize(){
 
+# ===== 第一步：停掉 =====
+qb_stop
+
+# ===== 第二步：写死配置（关键）=====
+mkdir -p /pt/qBittorrent/config
+
+cat > $QB_CONF <<EOF
+[Preferences]
+General\\Locale=zh
+Downloads\\SavePath=/pt/downloads
+
+Connection\\PortRangeMin=57777
+Connection\\UPnP=false
+
+Queueing\\QueueingEnabled=false
+
+Bittorrent\\DHT=false
+Bittorrent\\PeX=false
+Bittorrent\\LSD=false
+Advanced\\AnonymousMode=true
+
+WebUI\\Address=*
+WebUI\\Port=8080
+WebUI\\CSRFProtection=false
+WebUI\\ClickjackingProtection=false
+EOF
+
+# ===== 第三步：启动 =====
 qb_start
+
+# ===== 第四步：动态优化 =====
 qb_login
 
 RAM=$(free -m | awk '/Mem:/ {print $2}')
 CPU=$(nproc)
 
-# ===== 磁盘缓存（稳定版）=====
+# ===== 磁盘缓存 =====
 if [ $RAM -le 1024 ]; then
     cache=128
 elif [ $RAM -le 2048 ]; then
@@ -139,7 +161,7 @@ else
     aio=32
 fi
 
-# ===== 连接数 =====
+# ===== 连接 =====
 qb_mem=$((RAM * 70 / 100))
 mem_conn=$((qb_mem / 2))
 cpu_conn=$((CPU * 800))
@@ -174,39 +196,20 @@ echo "缓冲: $buf / $buf_low"
 echo "AIO: $aio"
 line
 
-# ===== 写配置 =====
+# ===== API写性能参数 =====
 curl -s -b $COOKIE --data-urlencode "json={
-\"locale\":\"zh\",
-\"save_path\":\"/pt/downloads\",
 \"max_connec\":$max_conn,
 \"max_connec_per_torrent\":$per_conn,
 \"max_uploads\":$upload,
 \"max_uploads_per_torrent\":$upload_t,
-\"listen_port\":57777,
-\"upnp\":false,
-\"enable_dht\":false,
-\"enable_pex\":false,
-\"enable_lsd\":false,
-\"anonymous_mode\":true,
-\"queueing_enabled\":false,
 \"disk_cache\":$cache,
 \"send_buffer_watermark\":$buf,
 \"send_buffer_low_watermark\":$buf_low,
 \"async_io_threads\":$aio,
-\"web_ui_csrf_protection_enabled\":false,
-\"web_ui_clickjacking_protection_enabled\":false,
 \"auto_tmm_enabled\":true
 }" $QB_URL/api/v2/app/setPreferences >/dev/null
 
-# ===== 再锁一次（防反弹）=====
-sleep 2
-curl -s -b $COOKIE --data-urlencode "json={
-\"enable_dht\":false,
-\"enable_pex\":false,
-\"enable_lsd\":false
-}" $QB_URL/api/v2/app/setPreferences >/dev/null
-
-echo -e "${c2}✔ 优化完成${n}"
+echo -e "${c2}✔ 优化完成（最终稳定版）${n}"
 }
 
 # ===== 安装 =====
