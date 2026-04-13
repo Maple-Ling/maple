@@ -23,14 +23,13 @@ echo -e "${c1}╚═════════════════════
 line(){ echo -e "${c1}══════════════════════════════════${n}"; }
 pause(){ read -p "按回车继续..."; }
 
-# ===== BBR自动 =====
+# ===== BBR =====
 set_cc(){
 avail=$(sysctl -n net.ipv4.tcp_available_congestion_control)
 for i in bbr3 bbr2 bbrplus bbr
 do
-echo $avail | grep -q $i && sysctl -w net.ipv4.tcp_congestion_control=$i >/dev/null && echo "👉 使用 $i" && return
+echo $avail | grep -q $i && sysctl -w net.ipv4.tcp_congestion_control=$i >/dev/null && return
 done
-echo "👉 使用 cubic"
 }
 
 apply_sysctl(){
@@ -43,7 +42,7 @@ done < $CONFIG_FILE
 
 # ===== PT优化 =====
 pt_opt(){
-box "🚀 PT刷流优化"
+box "🚀 PT优化"
 
 cat > $CONFIG_FILE <<EOF
 net.core.default_qdisc=fq
@@ -58,12 +57,12 @@ EOF
 set_cc
 apply_sysctl
 
-echo -e "${c2}✔ PT优化完成${n}"
+echo -e "${c2}✔ 完成${n}"
 }
 
 # ===== VLESS优化 =====
 vless_opt(){
-box "⚡ VLESS节点优化"
+box "⚡ VLESS优化"
 
 cat > $CONFIG_FILE <<EOF
 net.core.default_qdisc=fq
@@ -76,7 +75,7 @@ EOF
 set_cc
 apply_sysctl
 
-echo -e "${c2}✔ VLESS优化完成${n}"
+echo -e "${c2}✔ 完成${n}"
 }
 
 # ===== qB 控制 =====
@@ -99,7 +98,7 @@ curl -s -c $COOKIE \
 $QB_URL/api/v2/auth/login > /dev/null
 }
 
-# ===== 核心优化（安全模型版）=====
+# ===== 核心优化（最终稳定版）=====
 qb_optimize(){
 
 qb_start
@@ -108,21 +107,34 @@ qb_login
 RAM=$(free -m | awk '/Mem:/ {print $2}')
 CPU=$(nproc)
 
-# ===== 内存安全模型 =====
+# ===== 内存安全 =====
 qb_mem=$((RAM * 70 / 100))
 
-cache=$((qb_mem * 40 / 100))
-[ $cache -gt 1024 ] && cache=1024
-[ $cache -lt 128 ] && cache=128
+# ===== 磁盘缓存（修复版）=====
+if [ $RAM -le 1024 ]; then
+    cache=128
+elif [ $RAM -le 2048 ]; then
+    cache=256
+elif [ $RAM -le 4096 ]; then
+    cache=384
+else
+    cache=512
+fi
 
 write=$((cache / 4))
 
-# ===== CPU模型 =====
-aio=$((CPU * 4))
-[ $aio -lt 8 ] && aio=8
-[ $aio -gt 32 ] && aio=32
+# ===== AIO线程 =====
+if [ $CPU -le 1 ]; then
+    aio=8
+elif [ $CPU -le 2 ]; then
+    aio=12
+elif [ $CPU -le 4 ]; then
+    aio=16
+else
+    aio=32
+fi
 
-# ===== 连接模型（核心）=====
+# ===== 连接数（安全模型）=====
 mem_conn=$((qb_mem / 2))
 cpu_conn=$((CPU * 800))
 
@@ -135,9 +147,15 @@ per_conn=$((max_conn / 8))
 upload=$((CPU * 20))
 upload_t=$((CPU * 5))
 
-# ===== 缓冲 =====
-buf=$((CPU * 512))
-[ $buf -lt 512 ] && buf=512
+# ===== 发送缓冲（修复版）=====
+if [ $CPU -le 1 ]; then
+    buf=2048
+elif [ $CPU -le 2 ]; then
+    buf=4096
+else
+    buf=8192
+fi
+
 buf_low=$((buf / 2))
 
 mkdir -p /pt/downloads
@@ -151,7 +169,7 @@ echo "缓冲: $buf / $buf_low"
 echo "AIO: $aio"
 line
 
-# ===== API写入（绝对生效）=====
+# ===== API写入 =====
 curl -s -b $COOKIE \
 --data-urlencode "json={
 \"locale\":\"zh\",
@@ -178,7 +196,7 @@ curl -s -b $COOKIE \
 }" \
 $QB_URL/api/v2/app/setPreferences > /dev/null
 
-echo -e "${c2}✔ qB优化完成（安全压榨模式）${n}"
+echo -e "${c2}✔ 优化完成（稳定压榨）${n}"
 }
 
 # ===== 安装 =====
@@ -257,7 +275,7 @@ main_menu(){
 clear
 box "🚀 Linux终极控制面板"
 
-echo "1. 🚀 PT刷流优化"
+echo "1. 🚀 PT优化"
 echo "2. ⚡ VLESS优化"
 echo "3. 📦 qB管理"
 echo "0. ❌ 退出"
