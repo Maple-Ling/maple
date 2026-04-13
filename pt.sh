@@ -1,207 +1,252 @@
 #!/bin/bash
 
 CONFIG_FILE="/etc/sysctl.d/99-auto-opt.conf"
+QB_PATH="/pt"
+QB_BIN="$QB_PATH/qbittorrent-nox"
+QB_SERVICE="/etc/systemd/system/qbittorrent-nox.service"
 
 # 颜色
-GREEN="\033[32m"
-RED="\033[31m"
-YELLOW="\033[33m"
-NC="\033[0m"
+G="\033[32m"; R="\033[31m"; Y="\033[33m"; N="\033[0m"
 
+# =============================
+# 主菜单
+# =============================
+main_menu() {
 clear
 echo "======================================"
-echo " Linux 终极性能优化（智能完整版）"
+echo " Linux 终极性能优化面板（全能版）"
 echo "======================================"
-echo "1. PT刷流（极限并发）"
-echo "2. VLESS节点（极低延迟）"
+echo "1. PT刷流优化"
+echo "2. VLESS节点优化"
+echo "3. qBittorrent 管理"
 echo "0. 退出"
 echo "======================================"
 read -p "请选择: " choice
 
-# 🔍 自动选择最佳拥塞算法（不会降级）
-set_best_cc() {
-    avail=$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null)
-    current=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
-
-    echo ""
-    echo -e "${YELLOW}🔍 检测拥塞控制算法...${NC}"
-    echo "   可用算法: $avail"
-    echo "   当前算法: $current"
-
-    if echo "$avail" | grep -q "bbr3"; then
-        best="bbr3"
-    elif echo "$avail" | grep -q "bbr2"; then
-        best="bbr2"
-    elif echo "$avail" | grep -q "bbrplus"; then
-        best="bbrplus"
-    elif echo "$avail" | grep -q "bbr"; then
-        best="bbr"
-    else
-        best="cubic"
-    fi
-
-    echo -e "👉 选择算法: ${GREEN}$best${NC}"
-    sysctl -w net.ipv4.tcp_congestion_control=$best >/dev/null 2>&1
+case $choice in
+1) apply_pt ;;
+2) apply_vless ;;
+3) qb_menu ;;
+0) exit ;;
+*) echo "输入错误"; sleep 1 ;;
+esac
 }
 
-# 🚀 PT参数
-apply_pt() {
-cat > $CONFIG_FILE <<EOF
-# 队列 + BBR
-net.core.default_qdisc=fq
+# =============================
+# BBR智能选择
+# =============================
+set_best_cc() {
+avail=$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null)
 
-# 队列优化
+if echo "$avail" | grep -q "bbr3"; then algo="bbr3"
+elif echo "$avail" | grep -q "bbr2"; then algo="bbr2"
+elif echo "$avail" | grep -q "bbrplus"; then algo="bbrplus"
+elif echo "$avail" | grep -q "bbr"; then algo="bbr"
+else algo="cubic"
+fi
+
+echo -e "👉 拥塞算法: ${G}$algo${N}"
+sysctl -w net.ipv4.tcp_congestion_control=$algo >/dev/null
+}
+
+# =============================
+# PT优化
+# =============================
+apply_pt() {
+echo "🚀 PT优化中..."
+
+cat > $CONFIG_FILE <<EOF
+net.core.default_qdisc=fq
 net.core.netdev_max_backlog=100000
 net.core.somaxconn=65535
 net.ipv4.tcp_max_syn_backlog=65535
-
-# 端口
 net.ipv4.ip_local_port_range=10000 65535
-
-# 内存
 net.core.rmem_max=268435456
 net.core.wmem_max=268435456
 net.ipv4.tcp_rmem=4096 87380 134217728
 net.ipv4.tcp_wmem=4096 65536 134217728
-
-# TIME_WAIT
 net.ipv4.tcp_tw_reuse=1
 net.ipv4.tcp_fin_timeout=8
-
-# conntrack（核心）
 net.netfilter.nf_conntrack_max=1048576
-net.netfilter.nf_conntrack_tcp_timeout_time_wait=30
-
-# BBR增强
-net.ipv4.tcp_notsent_lowat=16384
-net.ipv4.tcp_fastopen=3
-net.ipv4.tcp_mtu_probing=1
-
-# 文件
 fs.file-max=4194304
-
-# VM
-vm.swappiness=5
-vm.dirty_background_ratio=5
-vm.dirty_ratio=20
-
-# IPv6
 net.ipv6.conf.all.disable_ipv6=0
-net.ipv6.conf.default.disable_ipv6=0
 EOF
+
+set_best_cc
+apply_sysctl
 }
 
-# 🚀 VLESS参数
+# =============================
+# VLESS优化
+# =============================
 apply_vless() {
+echo "🚀 VLESS优化中..."
+
 cat > $CONFIG_FILE <<EOF
 net.core.default_qdisc=fq
-
 net.core.netdev_max_backlog=20000
 net.core.somaxconn=20000
 net.ipv4.tcp_max_syn_backlog=20000
-
 net.core.rmem_max=67108864
 net.core.wmem_max=67108864
-
 net.ipv4.tcp_fastopen=3
 net.ipv4.tcp_mtu_probing=1
-net.ipv4.tcp_notsent_lowat=16384
-
-fs.file-max=1048576
-vm.swappiness=10
-
-# IPv6
 net.ipv6.conf.all.disable_ipv6=0
 EOF
+
+set_best_cc
+apply_sysctl
 }
 
-# ⚙️ 可视化应用
-apply_sysctl_verbose() {
-    echo ""
-    echo "⚙️ 应用系统参数..."
-    echo "--------------------------------"
+# =============================
+# sysctl应用（可视化）
+# =============================
+apply_sysctl() {
+echo "⚙️ 应用参数..."
 
-    while read line; do
-        [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
+while read line; do
+[[ "$line" =~ ^#.*$ || -z "$line" ]] && continue
 
-        key=$(echo $line | cut -d= -f1)
-        val=$(echo $line | cut -d= -f2-)
+key=$(echo $line | cut -d= -f1)
+val=$(echo $line | cut -d= -f2-)
 
-        printf "👉 %-40s = %-15s" "$key" "$val"
+printf "👉 %-35s = %-10s" "$key" "$val"
 
-        if sysctl -w "$key=$val" >/dev/null 2>&1; then
-            echo -e " ${GREEN}✔${NC}"
-        else
-            echo -e " ${RED}✘${NC}"
-        fi
-    done < $CONFIG_FILE
-
-    echo "--------------------------------"
+if sysctl -w "$key=$val" >/dev/null 2>&1; then
+echo -e " ${G}✔${N}"
+else
+echo -e " ${R}✘${N}"
+fi
+done < $CONFIG_FILE
 }
 
-# 🔥 文件句柄优化
-optimize_limits() {
-    echo ""
-    echo "🔧 优化文件句柄..."
+# =============================
+# 内存识别
+# =============================
+detect_ram() {
+ram=$(free -m | awk '/Mem:/ {print $2}')
 
-    if ! grep -q "1048576" /etc/security/limits.conf; then
-        cat >> /etc/security/limits.conf <<EOF
-* soft nofile 1048576
-* hard nofile 1048576
+if [ $ram -le 1024 ]; then level="low"
+elif [ $ram -le 2048 ]; then level="midlow"
+elif [ $ram -le 4096 ]; then level="midhigh"
+else level="high"
+fi
+
+echo "👉 内存: ${ram}MB → 等级: $level"
+}
+
+# =============================
+# qB优化
+# =============================
+qb_optimize() {
+detect_ram
+
+mkdir -p /pt/qBittorrent/config
+
+case $level in
+low)
+cat > /pt/qBittorrent/config/qBittorrent.conf <<EOF
+[Preferences]
+Connection\MaxConnections=800
+Session\DiskCacheSize=512
+Session\AsyncIOThreadsCount=4
 EOF
-        echo -e "${GREEN}✔ 已写入 limits.conf${NC}"
-    else
-        echo -e "${YELLOW}✔ 已存在，跳过${NC}"
-    fi
-}
-
-# 🚀 NIC优化
-nic_tune() {
-    echo ""
-    echo "🚀 网卡队列优化..."
-
-    for i in /sys/class/net/*/queues/rx-*; do
-        echo 4096 > $i/rps_flow_cnt 2>/dev/null
-    done
-
-    echo -e "${GREEN}✔ 已优化 RPS${NC}"
-}
-
-# 🔍 最终检查
-final_check() {
-    echo ""
-    echo "🔍 最终状态："
-    echo "--------------------------------"
-    echo "拥塞算法: $(sysctl -n net.ipv4.tcp_congestion_control)"
-    echo "backlog: $(sysctl -n net.core.netdev_max_backlog)"
-    echo "文件句柄: $(sysctl -n fs.file-max)"
-    echo "--------------------------------"
-}
-
-# 🚀 主流程
-case $choice in
-1)
-    apply_pt
-    set_best_cc
-    apply_sysctl_verbose
-    optimize_limits
-    nic_tune
-    final_check
-    ;;
-2)
-    apply_vless
-    set_best_cc
-    apply_sysctl_verbose
-    optimize_limits
-    final_check
-    ;;
-0)
-    exit 0
-    ;;
-*)
-    echo "输入错误"
-    ;;
+;;
+midlow)
+cat > /pt/qBittorrent/config/qBittorrent.conf <<EOF
+[Preferences]
+Connection\MaxConnections=1500
+Session\DiskCacheSize=1024
+Session\AsyncIOThreadsCount=8
+EOF
+;;
+midhigh)
+cat > /pt/qBittorrent/config/qBittorrent.conf <<EOF
+[Preferences]
+Connection\MaxConnections=3000
+Session\DiskCacheSize=2048
+Session\AsyncIOThreadsCount=16
+EOF
+;;
+high)
+cat > /pt/qBittorrent/config/qBittorrent.conf <<EOF
+[Preferences]
+Connection\MaxConnections=5000
+Session\DiskCacheSize=4096
+Session\AsyncIOThreadsCount=32
+EOF
+;;
 esac
 
-echo ""
-echo -e "${GREEN}✔ 优化完成（建议重启）${NC}"
+echo -e "${G}✔ qB配置已按机器自动优化${N}"
+}
+
+# =============================
+# qB菜单
+# =============================
+qb_menu() {
+clear
+echo "===== qB管理 ====="
+echo "1. 安装"
+echo "2. 卸载"
+echo "3. 启动"
+echo "4. 停止"
+echo "5. 重启"
+echo "0. 返回"
+read -p "选择: " q
+
+case $q in
+1) qb_install ;;
+2) qb_uninstall ;;
+3) systemctl start qbittorrent-nox ;;
+4) systemctl stop qbittorrent-nox ;;
+5) systemctl restart qbittorrent-nox ;;
+0) main_menu ;;
+esac
+}
+
+# =============================
+# 安装
+# =============================
+qb_install() {
+mkdir -p $QB_PATH
+wget -O $QB_BIN "你的下载链接"
+chmod +x $QB_BIN
+
+cat > $QB_SERVICE <<EOF
+[Unit]
+Description=qBittorrent
+After=network.target
+
+[Service]
+ExecStart=$QB_BIN --profile=$QB_PATH
+Restart=always
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable qbittorrent-nox
+
+qb_optimize
+
+echo -e "${G}✔ 安装完成${N}"
+}
+
+# =============================
+# 卸载
+# =============================
+qb_uninstall() {
+systemctl stop qbittorrent-nox 2>/dev/null
+systemctl disable qbittorrent-nox 2>/dev/null
+rm -f $QB_SERVICE
+rm -f $QB_BIN
+systemctl daemon-reload
+echo "✔ 已卸载"
+}
+
+# =============================
+# 启动
+# =============================
+main_menu
