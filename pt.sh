@@ -132,13 +132,13 @@ CPU=$(nproc)
 # ===== 融合计算 =====
 if [ $RAM -le 1024 ]; then cache=128
 elif [ $RAM -le 2048 ]; then cache=256
-elif [ $RAM -le 4096 ]; then cache=384
-else cache=512; fi
+elif [ $RAM -le 4096 ]; then cache=512
+else cache=1024; fi
 
 write=$((cache/4))
 
-if [ $CPU -le 1 ]; then aio=8
-elif [ $CPU -le 2 ]; then aio=12
+if [ $CPU -le 1 ]; then aio=4
+elif [ $CPU -le 2 ]; then aio=8
 elif [ $CPU -le 4 ]; then aio=16
 else aio=32; fi
 
