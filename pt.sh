@@ -197,6 +197,45 @@ curl -s -b $COOKIE --data-urlencode "json={
 echo -e "${c2}✔ 优化完成（最终版）${n}"
 }
 
+# ===== 种子备份 =====
+qb_backup(){
+box "📦 备份种子"
+
+SRC="/pt/qBittorrent/data/BT_backup"
+DST="/pt/BT_backup"
+
+if [ ! -d "$SRC" ]; then
+    echo -e "${c4}❌ 源目录不存在: $SRC${n}"
+    return
+fi
+
+rm -rf "$DST"
+cp -r "$SRC" "$DST"
+
+echo -e "${c2}✔ 备份完成 -> /pt/BT_backup${n}"
+}
+
+# ===== 种子恢复 =====
+qb_restore(){
+box "♻️ 恢复种子"
+
+SRC="/pt/BT_backup"
+DST="/pt/qBittorrent/data/BT_backup"
+
+if [ ! -d "$SRC" ]; then
+    echo -e "${c4}❌ 备份不存在: /pt/BT_backup${n}"
+    return
+fi
+
+qb_stop
+
+mkdir -p "/pt/qBittorrent/data"
+rm -rf "$DST"
+cp -r "$SRC" "$DST"
+
+echo -e "${c2}✔ 恢复完成${n}"
+}
+
 # ===== 安装 =====
 qb_install(){
 box "📦 安装 qB"
@@ -248,7 +287,9 @@ echo "1. 安装 + 优化"
 echo "2. 重新优化"
 echo "3. 启动"
 echo "4. 停止"
-echo "5. 卸载"
+echo "5. 备份种子"
+echo "6. 恢复种子"
+echo "7. 卸载"
 echo "0. 返回"
 line
 read -p "选择: " n
@@ -257,7 +298,9 @@ case $n in
 2) qb_optimize ;;
 3) qb_start ;;
 4) qb_stop ;;
-5) qb_uninstall ;;
+5) qb_backup ;;
+6) qb_restore ;;
+7) qb_uninstall ;;
 0) return ;;
 esac
 pause
