@@ -202,7 +202,8 @@ qb_install(){
 box "📦 安装 qB"
 mkdir -p $QB_PATH
 
-wget -O $QB_BIN https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.3.9_v1.2.15/x86_64-qbittorrent-nox
+wget -O $QB_BIN
+https://github.com/userdocs/qbittorrent-nox-static-legacy/releases/download/release-4.3.9_v1.2.20/x86_64-qbittorrent-nox
 
 chmod +x $QB_BIN
 
