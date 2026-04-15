@@ -15,6 +15,18 @@ CONFIG_FILE="/etc/sysctl.d/99-auto-opt.conf"
 # ===== UI =====
 c1="\033[1;36m"; c2="\033[1;32m"; c3="\033[1;33m"; c4="\033[1;31m"; n="\033[0m"
 
+gen_qb_password() {
+python3 - <<EOF
+import os, base64, hashlib
+
+password = "$1".encode()
+salt = os.urandom(16)
+dk = hashlib.pbkdf2_hmac('sha512', password, salt, 100000, dklen=64)
+
+print(f'@ByteArray({base64.b64encode(salt).decode()}:{base64.b64encode(dk).decode()})')
+EOF
+}
+
 box(){
 echo -e "${c1}╔════════════════════════════════╗${n}"
 printf "${c1}║ %-30s ║${n}\n" "$1"
@@ -112,6 +124,7 @@ Queueing\\QueueingEnabled=false
 Bittorrent\\DHT=false
 Bittorrent\\PeX=false
 Bittorrent\\LSD=false
+Bittorrent\\ValidateHTTPSTrackerCertificate=false
 Advanced\\AnonymousMode=true
 Advanced\\trackerPort=-1
 
@@ -121,6 +134,7 @@ WebUI\\Address=*
 WebUI\\Port=8080
 WebUI\\CSRFProtection=false
 WebUI\\ClickjackingProtection=false
+WebUI\\HostHeaderValidation=false
 EOF
 
 qb_start
@@ -182,7 +196,9 @@ curl -s -b $COOKIE --data-urlencode "json={
 \"auto_tmm_enabled\":true,
 \"enable_dht\":false,
 \"enable_pex\":false,
-\"enable_lsd\":false
+\"enable_lsd\":false,
+\"web_ui_host_header_validation\":false,
+\"validate_https_tracker_certificate\":false
 }" $QB_URL/api/v2/app/setPreferences >/dev/null
 
 sleep 3
@@ -294,6 +310,45 @@ sleep 3
 pkill qbittorrent-nox
 
 qb_optimize
+
+# ===== 隐式修复（模拟手动操作）=====
+qb_stop >/dev/null 2>&1
+
+echo
+echo -e "${c3}👉 请输入 WebUI 账号（默认 admin）:${n}"
+start_time=$(date +%s)
+read input_user
+
+echo -e "${c3}👉 请输入 WebUI 密码（默认 adminadmin）:${n}"
+read input_pass
+
+end_time=$(date +%s)
+elapsed=$((end_time - start_time))
+
+# 默认值
+[ -z "$input_user" ] && input_user="admin"
+[ -z "$input_pass" ] && input_pass="adminadmin"
+
+# ===== 生成PBKDF2密码 =====
+HASH=$(gen_qb_password "$input_pass")
+
+# ===== 写入配置（关键！）=====
+sed -i '/WebUI\\Username/d' $QB_CONF
+sed -i '/WebUI\\Password_PBKDF2/d' $QB_CONF
+
+cat >> $QB_CONF <<EOF
+WebUI\\Username=$input_user
+WebUI\\Password_PBKDF2="$HASH"
+EOF
+
+# ===== 时间控制 =====
+if [ $elapsed -lt 10 ]; then
+    wait_time=$((10 - elapsed))
+    echo -e "${c3}👉 等待 ${wait_time}s 初始化...${n}"
+    sleep $wait_time
+fi
+
+qb_start >/dev/null 2>&1
 
 echo -e "${c2}✔ 安装完成${n}"
 }
