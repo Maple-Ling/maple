@@ -236,15 +236,42 @@ cp -r "$SRC" "$DST"
 echo -e "${c2}✔ 恢复完成${n}"
 }
 
-# ===== 安装 =====
 qb_install(){
 box "📦 安装 qB"
 mkdir -p $QB_PATH
 
-wget -O $QB_BIN https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.3.9_v1.2.15/x86_64-qbittorrent-nox
+ARCH=$(uname -m)
 
+echo "👉 当前架构: $ARCH"
+
+# ===== 自动选择下载 =====
+if [[ "$ARCH" == "x86_64" ]]; then
+    QB_URL_DL="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.3.9_v1.2.15/x86_64-qbittorrent-nox"
+
+elif [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+    QB_URL_DL="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.3.9_v1.2.15/aarch64-qbittorrent-nox"
+
+elif [[ "$ARCH" == arm* ]]; then
+    echo -e "${c4}❌ 不支持的ARM架构: $ARCH${n}"
+    echo "👉 建议使用 aarch64 VPS"
+    return
+
+else
+    echo -e "${c4}❌ 未知架构: $ARCH${n}"
+    return
+fi
+
+echo "👉 下载: $QB_URL_DL"
+
+wget -O $QB_BIN $QB_URL_DL
+
+# ===== 权限 =====
 chmod +x $QB_BIN
 
+# ===== 校验 =====
+file $QB_BIN
+
+# ===== systemd =====
 cat > $QB_SERVICE <<EOF
 [Unit]
 Description=qBittorrent
@@ -261,6 +288,7 @@ EOF
 systemctl daemon-reload
 systemctl enable qbittorrent-nox
 
+# ===== 首次初始化 =====
 echo "y" | $QB_BIN --profile=/pt >/dev/null 2>&1 &
 sleep 3
 pkill qbittorrent-nox
