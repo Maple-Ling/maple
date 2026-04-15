@@ -12,8 +12,14 @@ QB_SERVICE="/etc/systemd/system/qbittorrent-nox.service"
 
 CONFIG_FILE="/etc/sysctl.d/99-auto-opt.conf"
 
-# ===== UI =====
-c1="\033[1;36m"; c2="\033[1;32m"; c3="\033[1;33m"; c4="\033[1;31m"; n="\033[0m"
+# ===== UI优化 =====
+# 简化颜色，只保留必要的几种
+RED='\033[1;31m'
+GREEN='\033[1;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[1;34m'
+CYAN='\033[1;36m'
+NC='\033[0m'  # 重置颜色
 
 gen_qb_password() {
 python3 - <<EOF
@@ -27,22 +33,50 @@ print(f'@ByteArray({base64.b64encode(salt).decode()}:{base64.b64encode(dk).decod
 EOF
 }
 
-box(){
-echo -e "${c1}╔════════════════════════════════╗${n}"
-printf "${c1}║ %-30s ║${n}\n" "$1"
-echo -e "${c1}╚════════════════════════════════╝${n}"
+# 简洁的标题函数
+print_title() {
+    echo
+    echo "========================================"
+    echo -e "${BLUE}$1${NC}"
+    echo "========================================"
+    echo
 }
-line(){ echo -e "${c1}══════════════════════════════════${n}"; }
-pause(){ read -p "按回车继续..."; }
+
+# 简洁的分隔线
+print_line() {
+    echo "----------------------------------------"
+}
+
+# 成功提示
+print_ok() {
+    echo -e "${GREEN}[✓]${NC} $1"
+}
+
+# 错误提示
+print_err() {
+    echo -e "${RED}[✗]${NC} $1"
+}
+
+# 警告提示
+print_warn() {
+    echo -e "${YELLOW}[!]${NC} $1"
+}
+
+# 暂停函数
+pause() { 
+    echo
+    echo -n "按回车键继续..."
+    read
+}
 
 # ===== BBR =====
 set_cc(){
 avail=$(sysctl -n net.ipv4.tcp_available_congestion_control)
 for i in bbr3 bbr2 bbrplus bbr
 do
-echo $avail | grep -q $i && sysctl -w net.ipv4.tcp_congestion_control=$i >/dev/null && echo "👉 使用 $i" && return
+echo $avail | grep -q $i && sysctl -w net.ipv4.tcp_congestion_control=$i >/dev/null && echo "使用 $i" && return
 done
-echo "👉 使用 cubic"
+echo "使用 cubic"
 }
 
 apply_sysctl(){
@@ -55,7 +89,8 @@ done < $CONFIG_FILE
 
 # ===== PT优化 =====
 pt_opt(){
-box "🚀 PT刷流优化"
+clear
+print_title "PT刷流优化"
 cat > $CONFIG_FILE <<EOF
 net.core.default_qdisc=fq
 net.core.netdev_max_backlog=100000
@@ -67,12 +102,14 @@ vm.swappiness=10
 EOF
 set_cc
 apply_sysctl
-echo -e "${c2}✔ 完成${n}"
+print_ok "PT刷流优化完成"
+pause
 }
 
 # ===== VLESS优化 =====
 vless_opt(){
-box "⚡ VLESS优化"
+clear
+print_title "VLESS优化"
 cat > $CONFIG_FILE <<EOF
 net.core.default_qdisc=fq
 net.core.netdev_max_backlog=20000
@@ -82,7 +119,8 @@ net.ipv4.tcp_mtu_probing=1
 EOF
 set_cc
 apply_sysctl
-echo -e "${c2}✔ 完成${n}"
+print_ok "VLESS优化完成"
+pause
 }
 
 # ===== qB控制 =====
@@ -97,6 +135,14 @@ systemctl start qbittorrent-nox
 sleep 6
 }
 
+# 添加重启功能
+qb_restart(){
+    print_warn "正在重启 qBittorrent..."
+    qb_stop
+    qb_start
+    print_ok "qBittorrent 已重启"
+}
+
 qb_login(){
 curl -s -c $COOKIE \
 --data "username=$QB_USER&password=$QB_PASS" \
@@ -105,6 +151,8 @@ $QB_URL/api/v2/auth/login > /dev/null
 
 # ===== 核心优化 =====
 qb_optimize(){
+clear
+print_title "qBittorrent 性能优化"
 
 qb_stop
 
@@ -174,14 +222,14 @@ buf_low=$((buf/2))
 
 mkdir -p /pt/downloads
 
-line
-echo -e "${c2}内存:${RAM}MB CPU:${CPU}${n}"
+print_line
+echo -e "${GREEN}内存:${RAM}MB CPU:${CPU}${NC}"
 echo "连接: $max_conn / $per_conn"
 echo "上传: $upload / $upload_t"
 echo "缓存: $cache / $write"
 echo "缓冲: $buf / $buf_low"
 echo "AIO: $aio"
-line
+print_line
 
 # 🔥 写性能参数
 curl -s -b $COOKIE --data-urlencode "json={
@@ -210,36 +258,42 @@ curl -s -b $COOKIE --data-urlencode "json={
 \"enable_lsd\":false
 }" $QB_URL/api/v2/app/setPreferences >/dev/null
 
-echo -e "${c2}✔ 优化完成（最终版）${n}"
+print_ok "优化完成（最终版）"
+pause
 }
 
 # ===== 种子备份 =====
 qb_backup(){
-box "📦 备份种子"
+clear
+print_title "备份种子"
 
 SRC="/pt/qBittorrent/data/BT_backup"
 DST="/pt/BT_backup"
 
 if [ ! -d "$SRC" ]; then
-    echo -e "${c4}❌ 源目录不存在: $SRC${n}"
+    print_err "源目录不存在: $SRC"
+    pause
     return
 fi
 
 rm -rf "$DST"
 cp -r "$SRC" "$DST"
 
-echo -e "${c2}✔ 备份完成 -> /pt/BT_backup${n}"
+print_ok "备份完成 -> /pt/BT_backup"
+pause
 }
 
 # ===== 种子恢复 =====
 qb_restore(){
-box "♻️ 恢复种子"
+clear
+print_title "恢复种子"
 
 SRC="/pt/BT_backup"
 DST="/pt/qBittorrent/data/BT_backup"
 
 if [ ! -d "$SRC" ]; then
-    echo -e "${c4}❌ 备份不存在: /pt/BT_backup${n}"
+    print_err "备份不存在: /pt/BT_backup"
+    pause
     return
 fi
 
@@ -249,16 +303,18 @@ mkdir -p "/pt/qBittorrent/data"
 rm -rf "$DST"
 cp -r "$SRC" "$DST"
 
-echo -e "${c2}✔ 恢复完成${n}"
+print_ok "恢复完成"
+pause
 }
 
 qb_install(){
-box "📦 安装 qB"
+clear
+print_title "安装 qBittorrent"
 mkdir -p $QB_PATH
 
 ARCH=$(uname -m)
 
-echo "👉 当前架构: $ARCH"
+echo -e "${CYAN}当前架构: $ARCH${NC}"
 
 # ===== 自动选择下载 =====
 if [[ "$ARCH" == "x86_64" ]]; then
@@ -268,16 +324,18 @@ elif [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
     QB_URL_DL="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.3.9_v1.2.15/aarch64-qbittorrent-nox"
 
 elif [[ "$ARCH" == arm* ]]; then
-    echo -e "${c4}❌ 不支持的ARM架构: $ARCH${n}"
-    echo "👉 建议使用 aarch64 VPS"
+    print_err "不支持的ARM架构: $ARCH"
+    echo "建议使用 aarch64 VPS"
+    pause
     return
 
 else
-    echo -e "${c4}❌ 未知架构: $ARCH${n}"
+    print_err "未知架构: $ARCH"
+    pause
     return
 fi
 
-echo "👉 下载: $QB_URL_DL"
+echo "下载: $QB_URL_DL"
 
 wget -O $QB_BIN $QB_URL_DL
 
@@ -315,11 +373,11 @@ qb_optimize
 qb_stop >/dev/null 2>&1
 
 echo
-echo -e "${c3}👉 请输入 WebUI 账号（默认 admin）:${n}"
+echo -e "${YELLOW}请输入 WebUI 账号（默认 admin）:${NC}"
 start_time=$(date +%s)
 read input_user
 
-echo -e "${c3}👉 请输入 WebUI 密码（默认 adminadmin）:${n}"
+echo -e "${YELLOW}请输入 WebUI 密码（默认 adminadmin）:${NC}"
 read input_pass
 
 end_time=$(date +%s)
@@ -344,69 +402,129 @@ EOF
 # ===== 时间控制 =====
 if [ $elapsed -lt 10 ]; then
     wait_time=$((10 - elapsed))
-    echo -e "${c3}👉 等待 ${wait_time}s 初始化...${n}"
+    echo -e "${YELLOW}等待 ${wait_time}s 初始化...${NC}"
     sleep $wait_time
 fi
 
 qb_start >/dev/null 2>&1
 
-echo -e "${c2}✔ 安装完成${n}"
+print_ok "安装完成"
+pause
 }
 
 qb_uninstall(){
-qb_stop
-systemctl disable qbittorrent-nox
-rm -f $QB_BIN $QB_SERVICE
-rm -rf /pt/qBittorrent
-systemctl daemon-reload
-echo -e "${c2}✔ 已彻底卸载${n}"
+clear
+print_title "卸载 qBittorrent"
+
+echo -e "${RED}警告：此操作将永久删除 qBittorrent 及其配置！${NC}"
+echo -n "确认要卸载吗？(y/N): "
+read confirm
+
+if [[ $confirm =~ ^[Yy]$ ]]; then
+    qb_stop
+    systemctl disable qbittorrent-nox
+    rm -f $QB_BIN $QB_SERVICE
+    rm -rf /pt/qBittorrent
+    systemctl daemon-reload
+    print_ok "已彻底卸载"
+else
+    echo "卸载已取消"
+fi
+pause
+}
+
+# ===== 科技感猫图案 =====
+print_tech_cat() {
+    echo
+    echo -e "${CYAN}    ___   ___  ___  ___  ___  ___  ___  ___"
+    echo "   /   \ /   \/   \/   \/   \/   \/   \/   \\"
+    echo "  |  T  |  E  |  C  |  H  |  C  |  A  |  T  |"
+    echo "   \___/\___/\___/\___/\___/\___/\___/\___/"
+    echo
+    echo -e "        /\_/\           |\___/|"
+    echo -e "       ( ${GREEN}o${CYAN}.${GREEN}o${CYAN} )          |     |"
+    echo -e "        > ${YELLOW}^${CYAN} <           /       \\"
+    echo -e "         ${BLUE}=================${CYAN}"
+    echo -e "${NC}"
 }
 
 # ===== 菜单 =====
 qb_menu(){
-clear
-box "📦 qB管理"
-echo "1. 安装 + 优化"
-echo "2. 重新优化"
-echo "3. 启动"
-echo "4. 停止"
-echo "5. 备份种子"
-echo "6. 恢复种子"
-echo "7. 卸载"
-echo "0. 返回"
-line
-read -p "选择: " n
-case $n in
-1) qb_install ;;
-2) qb_optimize ;;
-3) qb_start ;;
-4) qb_stop ;;
-5) qb_backup ;;
-6) qb_restore ;;
-7) qb_uninstall ;;
-0) return ;;
-esac
-pause
-qb_menu
+while true; do
+    clear
+    print_tech_cat
+    print_title "qBittorrent 管理"
+    
+    echo "1. 安装 + 优化"
+    echo "2. 重新优化"
+    echo "3. 启动"
+    echo "4. 停止"
+    echo "5. 重启"
+    echo "6. 备份种子"
+    echo "7. 恢复种子"
+    echo "8. 卸载"
+    echo "0. 返回主菜单"
+    print_line
+    
+    read -p "请选择 (0-8): " choice
+    
+    case $choice in
+        1) qb_install ;;
+        2) qb_optimize ;;
+        3) 
+            qb_start
+            print_ok "qBittorrent 已启动"
+            pause
+            ;;
+        4) 
+            qb_stop
+            print_ok "qBittorrent 已停止"
+            pause
+            ;;
+        5) qb_restart; pause ;;
+        6) qb_backup ;;
+        7) qb_restore ;;
+        8) qb_uninstall ;;
+        0) break ;;
+        *) 
+            print_err "无效选择，请重新输入"
+            sleep 1
+            ;;
+    esac
+done
 }
 
 main_menu(){
-clear
-box "🚀 Linux终极控制面板"
-echo "1. 🚀 PT优化"
-echo "2. ⚡ VLESS优化"
-echo "3. 📦 qB管理"
-echo "0. ❌ 退出"
-line
-read -p "选择: " n
-case $n in
-1) pt_opt ;;
-2) vless_opt ;;
-3) qb_menu ;;
-0) exit ;;
-esac
-pause
-main_menu
+while true; do
+    clear
+    print_tech_cat
+    print_title "Linux 控制面板"
+    
+    echo "1. PT刷流优化"
+    echo "2. VLESS优化"
+    echo "3. qBittorrent 管理"
+    echo "0. 退出"
+    print_line
+    
+    read -p "请选择 (0-3): " choice
+    
+    case $choice in
+        1) pt_opt ;;
+        2) vless_opt ;;
+        3) qb_menu ;;
+        0) 
+            clear
+            echo
+            echo "感谢使用！"
+            echo
+            exit 0
+            ;;
+        *) 
+            print_err "无效选择，请重新输入"
+            sleep 1
+            ;;
+    esac
+done
 }
 
 main_menu
