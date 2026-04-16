@@ -964,6 +964,76 @@ qb_menu(){
     done
 }
 
+# =============================================================================
+#                             脚本目录管理
+# =============================================================================
+run_yuju_toolbox() {
+    clear
+    print_title "运行 yuju 工具箱"
+    echo -e "${CYAN}正在下载并运行 yuju 工具箱...${NC}"
+    
+    # 创建临时目录
+    local temp_dir="/tmp/yuju_install"
+    mkdir -p "$temp_dir"
+    cd "$temp_dir"
+    
+    # 下载并运行
+    curl -sS -O https://raw.githubusercontent.com/yuju520/YujuToolBox/main/yuju.sh
+    chmod +x yuju.sh
+    ./yuju.sh
+    
+    cd - >/dev/null
+    pause
+}
+
+run_kejilion_toolbox() {
+    clear
+    print_title "运行 科技lion 工具箱"
+    echo -e "${CYAN}正在下载并运行 科技lion 工具箱...${NC}"
+    
+    # 创建临时目录
+    local temp_dir="/tmp/kejilion_install"
+    mkdir -p "$temp_dir"
+    cd "$temp_dir"
+    
+    # 下载并运行
+    curl -sS -O https://raw.githubusercontent.com/kejilion/sh/main/kejilion.sh
+    chmod +x kejilion.sh
+    ./kejilion.sh
+    
+    cd - >/dev/null
+    pause
+}
+
+script_directory_menu() {
+    while true; do
+        clear
+        print_simple_title
+        print_title "脚本目录"
+        
+        echo "1. yuju 工具箱"
+        echo "   一款多功能 Linux 工具箱，包含系统优化、测试、工具下载等功能"
+        echo
+        echo "2. 科技lion 工具箱"
+        echo "   强大的服务器管理工具箱，包含 Docker 管理、网站部署、系统优化等"
+        echo
+        echo "0. 返回主菜单"
+        print_line
+        
+        read -p "请选择 (0-2): " choice
+        
+        case $choice in
+            1) run_yuju_toolbox ;;
+            2) run_kejilion_toolbox ;;
+            0) break ;;
+            *) 
+                print_err "无效选择，请重新输入"
+                sleep 1
+                ;;
+        esac
+    done
+}
+
 main_menu(){
     while true; do
         clear
@@ -974,10 +1044,11 @@ main_menu(){
         echo "3. 查看当前优化状态"
         echo "4. 安装TCP拥塞控制算法"
         echo "5. qBittorrent 管理"
+        echo "6. 脚本目录"  # 新增选项
         echo "0. 退出"
         print_line
         
-        read -p "请选择 (0-5): " choice
+        read -p "请选择 (0-6): " choice
         
         case $choice in
             1) pt_opt ;;
@@ -985,6 +1056,7 @@ main_menu(){
             3) view_optimization ;;
             4) install_tcp_algo ;;
             5) qb_menu ;;
+            6) script_directory_menu ;;  # 新增功能
             0) 
                 clear
                 echo
@@ -999,5 +1071,6 @@ main_menu(){
         esac
     done
 }
+
 
 main_menu
