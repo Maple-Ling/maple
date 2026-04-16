@@ -93,6 +93,73 @@ apply_sysctl(){
     sysctl -p $CONFIG_FILE >/dev/null 2>&1
 }
 
+# ===== 系统调优检测和安装 =====
+check_and_install_tuning() {
+    print_info "检查系统调优状态..."
+    
+    # 检查是否已应用系统调优（通过检查sysctl参数）
+    if [ -f /etc/sysctl.conf ] && grep -q "net.core.default_qdisc = fq" /etc/sysctl.conf; then
+        print_ok "系统调优已应用"
+    else
+        print_info "系统调优未应用，开始安装..."
+        
+        # 下载并运行jerry048的调优脚本
+        bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -t
+        
+        if [ $? -eq 0 ]; then
+            print_ok "系统调优安装完成"
+        else
+            print_err "系统调优安装失败"
+        fi
+    fi
+}
+
+# ===== 调用jerry048脚本安装TCP算法 =====
+install_by_jerry048() {
+    local algo=$1  # "bbrx" 或 "bbrv3"
+    
+    print_info "使用jerry048脚本安装 $algo..."
+    
+    # 下载并运行jerry048的tune.sh脚本
+    if [[ "$algo" == "bbrx" ]]; then
+        bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -x
+    elif [[ "$algo" == "bbrv3" ]]; then
+        bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -3
+    else
+        print_err "不支持的算法: $algo"
+        return 1
+    fi
+    
+    if [ $? -eq 0 ]; then
+        print_ok "$algo 安装完成"
+        return 0
+    else
+        print_err "$algo 安装失败"
+        return 1
+    fi
+}
+
+# 启用原生BBR
+enable_native_bbr() {
+    print_info "启用 Linux 内核原生 BBR..."
+    
+    # 提取内核主版本和次版本
+    KERNEL_MAJOR=$(uname -r | cut -d. -f1)
+    KERNEL_MINOR=$(uname -r | cut -d. -f2)
+    
+    # 转换为整数比较：4.9 = 4009
+    KERNEL_VERSION_INT=$((KERNEL_MAJOR * 1000 + KERNEL_MINOR))
+    
+    if [[ $KERNEL_VERSION_INT -ge 4009 ]]; then
+        echo "net.core.default_qdisc=fq" >> $CONFIG_FILE
+        echo "net.ipv4.tcp_congestion_control=bbr" >> $CONFIG_FILE
+        sysctl -p $CONFIG_FILE >/dev/null 2>&1
+        print_ok "原生 BBR 已启用 (内核版本: $(uname -r), 内存需求: 最低)"
+    else
+        print_err "内核版本 ($(uname -r)) 过低，无法启用原生 BBR，将使用系统默认算法。"
+    fi
+}
+
 # ===== 安装TCP算法 =====
 install_tcp_algo() {
     clear
@@ -125,15 +192,7 @@ install_tcp_algo() {
     case $choice in
         1)
             print_info "正在安装BBR (Linux内核原生)..."
-            KERNEL_VERSION=$(uname -r | cut -d. -f1-2)
-            if [ $(echo "$KERNEL_VERSION >= 4.9" | bc) -eq 1 ]; then
-                echo "net.core.default_qdisc=fq" >> $CONFIG_FILE
-                echo "net.ipv4.tcp_congestion_control=bbr" >> $CONFIG_FILE
-                sysctl -p $CONFIG_FILE
-                print_ok "BBR已启用 (内存需求: 最低)"
-            else
-                print_err "内核版本需要4.9以上，当前版本: $(uname -r)"
-            fi
+            enable_native_bbr
             ;;
         2)
             # 检查内存
@@ -142,28 +201,7 @@ install_tcp_algo() {
                 read -p "是否继续安装？(y/N): " confirm
                 [[ ! $confirm =~ ^[Yy]$ ]] && return
             fi
-            print_info "正在安装BBRx (优化版)..."
-            wget -O /tmp/bbrx.sh https://raw.githubusercontent.com/tcp-nanqinlang/general/master/General/CentOS/bash/tcp_nanqinlang-1.3.2.sh
-            if [ $? -eq 0 ]; then
-                chmod +x /tmp/bbrx.sh
-                bash /tmp/bbrx.sh
-                if [ $? -eq 0 ]; then
-                    echo "net.core.default_qdisc=fq" >> $CONFIG_FILE
-                    echo "net.ipv4.tcp_congestion_control=bbr" >> $CONFIG_FILE
-                    sysctl -p $CONFIG_FILE
-                    print_ok "BBRx安装完成 (内存需求: 中等)"
-                else
-                    print_err "BBRx安装失败，启用原生BBR"
-                    echo "net.core.default_qdisc=fq" >> $CONFIG_FILE
-                    echo "net.ipv4.tcp_congestion_control=bbr" >> $CONFIG_FILE
-                    sysctl -p $CONFIG_FILE
-                fi
-            else
-                print_err "下载BBRx脚本失败，启用原生BBR"
-                echo "net.core.default_qdisc=fq" >> $CONFIG_FILE
-                echo "net.ipv4.tcp_congestion_control=bbr" >> $CONFIG_FILE
-                sysctl -p $CONFIG_FILE
-            fi
+            install_by_jerry048 "bbrx"
             ;;
         3)
             # 检查内存
@@ -172,28 +210,7 @@ install_tcp_algo() {
                 read -p "是否继续安装？(y/N): " confirm
                 [[ ! $confirm =~ ^[Yy]$ ]] && return
             fi
-            print_info "正在安装BBRv3 (最新版)..."
-            wget -O /tmp/bbrv3.sh https://raw.githubusercontent.com/google/bbr/master/v3alpha/bbr.sh
-            if [ $? -eq 0 ]; then
-                chmod +x /tmp/bbrv3.sh
-                bash /tmp/bbrv3.sh
-                if [ $? -eq 0 ]; then
-                    echo "net.core.default_qdisc=fq" >> $CONFIG_FILE
-                    echo "net.ipv4.tcp_congestion_control=bbr" >> $CONFIG_FILE
-                    sysctl -p $CONFIG_FILE
-                    print_ok "BBRv3安装完成 (内存需求: 较高)"
-                else
-                    print_err "BBRv3安装失败，启用原生BBR"
-                    echo "net.core.default_qdisc=fq" >> $CONFIG_FILE
-                    echo "net.ipv4.tcp_congestion_control=bbr" >> $CONFIG_FILE
-                    sysctl -p $CONFIG_FILE
-                fi
-            else
-                print_err "下载BBRv3脚本失败，启用原生BBR"
-                echo "net.core.default_qdisc=fq" >> $CONFIG_FILE
-                echo "net.ipv4.tcp_congestion_control=bbr" >> $CONFIG_FILE
-                sysctl -p $CONFIG_FILE
-            fi
+            install_by_jerry048 "bbrv3"
             ;;
         4)
             return
@@ -210,22 +227,107 @@ install_tcp_algo() {
     pause
 }
 
+# ===== 自动安装TCP算法（集成在优化中） =====
+auto_install_bbr() {
+    print_info "开始执行系统优化和TCP算法安装..."
+    
+    # 步骤1: 检查并安装系统调优
+    check_and_install_tuning
+    
+    # 步骤2: 检查并安装BBR算法
+    print_info "检查并安装BBR算法..."
+    
+    # 获取当前TCP拥塞控制算法
+    CURRENT_CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "none")
+    
+    # 只检测BBRx和BBRv3，不检测原生BBR
+    if [[ "$CURRENT_CC" == "bbrx" ]] || [[ "$CURRENT_CC" == "bbr3" ]]; then
+        print_ok "已检测到优化算法 [$CURRENT_CC]，跳过自动安装。"
+        return
+    fi
+    
+    # 获取系统信息
+    RAM=$(free -m | awk '/Mem:/ {print $2}')
+    KERNEL_MAJOR=$(uname -r | cut -d. -f1)
+    KERNEL_MINOR=$(uname -r | cut -d. -f2)
+    KERNEL_VERSION_NUM=$((KERNEL_MAJOR * 1000 + KERNEL_MINOR))
+    
+    # 根据配置选择安装BBR版本
+    if [[ $KERNEL_VERSION_NUM -ge 5019 ]] && [[ $RAM -ge 2048 ]]; then
+        print_info "满足BBRv3安装条件，尝试安装BBRv3..."
+        install_by_jerry048 "bbrv3"
+    elif [[ $RAM -ge 1024 ]]; then
+        print_info "满足BBRx安装条件，尝试安装BBRx..."
+        install_by_jerry048 "bbrx"
+    else
+        print_info "条件不满足，使用原生BBR..."
+        enable_native_bbr
+    fi
+    
+    # 验证安装结果
+    sleep 2
+    CURRENT_CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "none")
+    if [[ "$CURRENT_CC" != "none" ]]; then
+        print_ok "TCP算法安装完成，当前算法: $CURRENT_CC"
+    else
+        print_err "TCP算法安装失败"
+    fi
+}
+
+
 # ===== 查看当前优化状态 =====
 view_optimization() {
     clear
     print_title "当前优化状态"
     
-    echo -e "${GREEN}=== TCP拥塞控制算法 ===${NC}"
-    sysctl net.ipv4.tcp_congestion_control 2>/dev/null || echo "未知"
+    # 系统基本信息
+    echo -e "${GREEN}=== 系统基本信息 ===${NC}"
+    echo "主机名: $(hostname)"
+    echo "操作系统: $(cat /etc/os-release | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"')"
+    echo "内核版本: $(uname -r)"
+    echo "系统架构: $(uname -m)"
     
+    # CPU信息
+    echo -e "\n${GREEN}=== CPU信息 ===${NC}"
+    echo "CPU型号: $(lscpu | grep "Model name" | cut -d: -f2 | sed 's/^[ \t]*//')"
+    echo "CPU核心数: $(nproc)"
+    echo "CPU频率: $(lscpu | grep "CPU MHz" | cut -d: -f2 | sed 's/^[ \t]*//') MHz"
+    echo "CPU缓存:"
+    lscpu | grep -E "L[123] cache" | while read line; do
+        echo "  $line"
+    done
+    
+    # 内存信息
+    echo -e "\n${GREEN}=== 内存信息 ===${NC}"
+    free -h | while read line; do
+        echo "  $line"
+    done
+    
+    # TCP拥塞控制算法
+    echo -e "\n${GREEN}=== TCP拥塞控制算法 ===${NC}"
+    CURRENT_CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "未知")
+    echo "当前算法: $CURRENT_CC"
+    echo "可用算法: $(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || echo "未知")"
+    
+    # IPv4网络核心参数
     echo -e "\n${GREEN}=== IPv4网络核心参数 ===${NC}"
     sysctl net.core.rmem_max net.core.wmem_max net.core.netdev_max_backlog net.core.somaxconn 2>/dev/null
     
+    # IPv6优化状态
     echo -e "\n${GREEN}=== IPv6优化状态 ===${NC}"
     sysctl net.ipv6.conf.all.accept_ra net.ipv6.conf.all.accept_redirects 2>/dev/null || echo "IPv6未配置"
     
+    # 文件描述符限制
     echo -e "\n${GREEN}=== 文件描述符限制 ===${NC}"
     ulimit -n
+    
+    # 磁盘信息
+    echo -e "\n${GREEN}=== 磁盘使用情况 ===${NC}"
+    df -h /pt 2>/dev/null || df -h / 2>/dev/null
+    
+    # 系统负载
+    echo -e "\n${GREEN}=== 系统负载 ===${NC}"
+    uptime
     
     pause
 }
@@ -234,6 +336,11 @@ view_optimization() {
 pt_opt(){
     clear
     print_title "PT刷流优化"
+    
+    # 第一步：检测系统调优并安装TCP算法
+    auto_install_bbr
+    
+    # 第二步：应用PT刷流优化配置
     cat > $CONFIG_FILE <<EOF
 # 网络核心参数
 net.core.rmem_default = 8388608
@@ -266,7 +373,6 @@ net.ipv4.tcp_ecn = 0
 net.ipv4.tcp_slow_start_after_idle = 0
 net.ipv4.tcp_no_metrics_save = 1
 net.ipv4.tcp_moderate_rcvbuf = 1
-net.ipv4.tcp_congestion_control = bbr
 net.ipv4.tcp_adv_win_scale = 1
 net.ipv4.tcp_app_win = 31
 net.ipv4.tcp_autocorking = 0
@@ -334,6 +440,11 @@ EOF
 vless_opt(){
     clear
     print_title "VLESS优化"
+    
+    # 第一步：检测系统调优并安装TCP算法
+    auto_install_bbr
+    
+    # 第二步：应用VLESS优化配置
     cat > $CONFIG_FILE <<EOF
 # 网络核心参数
 net.core.rmem_default = 8388608
@@ -362,7 +473,6 @@ net.ipv4.tcp_ecn = 0
 net.ipv4.tcp_slow_start_after_idle = 0
 net.ipv4.tcp_no_metrics_save = 1
 net.ipv4.tcp_moderate_rcvbuf = 1
-net.ipv4.tcp_congestion_control = bbr
 net.ipv4.tcp_adv_win_scale = 1
 net.ipv4.tcp_app_win = 31
 net.ipv4.tcp_autocorking = 0
@@ -491,38 +601,84 @@ EOF
 
     RAM=$(free -m | awk '/Mem:/ {print $2}')
     CPU=$(nproc)
+    
+    # 计算RAM的GB数（向上取整）
+    RAM_GB=$(( (RAM + 1023) / 1024 ))
 
-    # ===== 融合计算 =====
-    if [ $RAM -le 1024 ]; then cache=128
-    elif [ $RAM -le 2048 ]; then cache=256
-    elif [ $RAM -le 4096 ]; then cache=512
-    else cache=1024; fi
+    # ===== 连接数计算 =====
+    # 1c1g: 500/100, 2c4g: 2000/200, 4c4g以上: -1/-1
+    if [[ $CPU -eq 1 ]] && [[ $RAM_GB -eq 1 ]]; then
+        max_conn=500
+        per_conn=100
+    elif [[ $CPU -eq 2 ]] && [[ $RAM_GB -eq 4 ]]; then
+        max_conn=2000
+        per_conn=200
+    elif [[ $CPU -ge 4 ]] && [[ $RAM_GB -ge 4 ]]; then
+        max_conn=-1
+        per_conn=-1
+    else
+        # 其他配置的插值计算
+        # 基于CPU和RAM的线性插值
+        cpu_weight=$((CPU * 100))
+        ram_weight=$((RAM_GB * 25))
+        
+        # 计算相对于1c1g的增量
+        base_increase=$(( (cpu_weight + ram_weight) / 2 ))
+        per_increase=$(( (cpu_weight + ram_weight) / 20 ))
+        
+        # 计算最终值
+        max_conn=$((500 + base_increase))
+        per_conn=$((100 + per_increase))
+        
+        # 限制不超过2c4g的值
+        [ $max_conn -gt 2000 ] && max_conn=2000
+        [ $per_conn -gt 200 ] && per_conn=200
+    fi
 
+    # ===== 磁盘缓存计算 =====
+    # 物理内存的1/8
+    cache=$((RAM/8))
+    # 设置最小缓存为32MB
+    [ $cache -lt 32 ] && cache=32
     write=$((cache/4))
 
+    # ===== 发送缓冲计算 =====
+    # 1c1g: 2048/512, 4c4g以上: 10240/3072
+    if [[ $CPU -eq 1 ]] && [[ $RAM_GB -eq 1 ]]; then
+        buf=2048
+        buf_low=512
+    elif [[ $CPU -ge 4 ]] && [[ $RAM_GB -ge 4 ]]; then
+        buf=10240
+        buf_low=3072
+    else
+        # 其他配置的线性插值
+        # 基于CPU核心数的插值
+        if [ $CPU -eq 1 ]; then
+            buf=2048
+            buf_low=512
+        elif [ $CPU -eq 2 ]; then
+            buf=4096
+            buf_low=1024
+        elif [ $CPU -eq 3 ]; then
+            buf=6144
+            buf_low=1792
+        else
+            # CPU>=4但RAM<4G的情况
+            buf=8192
+            buf_low=2048
+        fi
+    fi
+
+    # ===== 上传槽计算 =====
+    # 根据您的需求，设置为-1表示无限
+    upload=-1
+    upload_t=-1
+
+    # ===== AIO线程计算 =====
     if [ $CPU -le 1 ]; then aio=4
     elif [ $CPU -le 2 ]; then aio=8
     elif [ $CPU -le 4 ]; then aio=16
     else aio=32; fi
-
-    qb_mem=$((RAM*70/100))
-    mem_conn=$((qb_mem/2))
-    cpu_conn=$((CPU*800))
-    max_conn=$(( mem_conn < cpu_conn ? mem_conn : cpu_conn ))
-    max_conn=$((max_conn*80/100))
-    per_conn=$((max_conn/8))
-    
-    # 单个种子连接数最低100
-    [ $per_conn -lt 100 ] && per_conn=100
-
-    upload=$((CPU*20))
-    upload_t=$((CPU*5))
-
-    if [ $CPU -le 1 ]; then buf=2048
-    elif [ $CPU -le 2 ]; then buf=4096
-    else buf=8192; fi
-
-    buf_low=$((buf/2))
 
     mkdir -p /pt/downloads
 
@@ -772,13 +928,12 @@ qb_menu(){
         print_title "qBittorrent 管理"
         
         echo "1. 安装 + 优化"
-        echo "2. 重新优化"
-        echo "3. 启动"
-        echo "4. 停止"
-        echo "5. 重启"
-        echo "6. 备份种子"
-        echo "7. 恢复种子"
-        echo "8. 卸载"
+        echo "2. 启动"
+        echo "3. 停止"
+        echo "4. 重启"
+        echo "5. 备份种子"
+        echo "6. 恢复种子"
+        echo "7. 卸载"
         echo "0. 返回主菜单"
         print_line
         
@@ -786,21 +941,20 @@ qb_menu(){
         
         case $choice in
             1) qb_install ;;
-            2) qb_optimize ;;
-            3) 
+            2) 
                 qb_start
                 print_ok "qBittorrent 已启动"
                 pause
                 ;;
-            4) 
+            3) 
                 qb_stop
                 print_ok "qBittorrent 已停止"
                 pause
                 ;;
-            5) qb_restart; pause ;;
-            6) qb_backup ;;
-            7) qb_restore ;;
-            8) qb_uninstall ;;
+            4) qb_restart; pause ;;
+            5) qb_backup ;;
+            6) qb_restore ;;
+            7) qb_uninstall ;;
             0) break ;;
             *) 
                 print_err "无效选择，请重新输入"
