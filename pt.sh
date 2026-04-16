@@ -227,49 +227,22 @@ install_tcp_algo() {
     pause
 }
 
-auto_install_bbr() {
-    print_info "开始安装 BBR（优先 v3 -> v2）..."
+enable_bbr_fq() {
+    print_info "启用 BBR + fq（稳定抢种版）..."
 
-    apt-get update -y >/dev/null 2>&1
-    apt-get install -y wget curl >/dev/null 2>&1
+    # 写入配置
+    sed -i '/net.core.default_qdisc/d' /etc/sysctl.conf
+    sed -i '/net.ipv4.tcp_congestion_control/d' /etc/sysctl.conf
 
-    CURRENT_CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+    echo "net.core.default_qdisc = fq" >> /etc/sysctl.conf
+    echo "net.ipv4.tcp_congestion_control = bbr" >> /etc/sysctl.conf
 
-    if [[ "$CURRENT_CC" == "bbr3" ]] || [[ "$CURRENT_CC" == "bbr2" ]]; then
-        print_ok "已存在 BBR算法: $CURRENT_CC"
-        return
-    fi
+    sysctl -p >/dev/null 2>&1
 
-    # ===== 尝试 BBRv3 =====
-    print_info "尝试安装 BBRv3..."
-    bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -3
+    CC=$(sysctl -n net.ipv4.tcp_congestion_control)
+    QDISC=$(sysctl -n net.core.default_qdisc)
 
-    sleep 3
-    sysctl -w net.core.default_qdisc=fq >/dev/null 2>&1
-
-    CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
-
-    if [[ "$CC" == "bbr3" ]]; then
-        print_ok "BBRv3 安装成功"
-    else
-        print_warn "BBRv3 失败，尝试 BBRv2..."
-
-        bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -2
-
-        sleep 3
-        sysctl -w net.core.default_qdisc=fq >/dev/null 2>&1
-
-        CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
-
-        if [[ "$CC" == "bbr2" ]]; then
-            print_ok "BBRv2 安装成功"
-        else
-            print_warn "BBRv2 失败，使用原生BBR"
-
-            sysctl -w net.core.default_qdisc=fq
-            sysctl -w net.ipv4.tcp_congestion_control=bbr
-        fi
-    fi
+    print_ok "当前算法: $CC | 队列: $QDISC"
 }
 
 # ===== 查看当前优化状态 =====
@@ -335,7 +308,7 @@ pt_opt(){
     print_title "PT刷流优化"
     
     # 第一步：检测系统调优并安装TCP算法
-    auto_install_bbr
+    enable_bbr_fq
     
     # 第二步：应用PT刷流优化配置
   CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
@@ -360,19 +333,19 @@ net.ipv4.tcp_wmem = 4096 65536 134217728
 # ===== 并发 =====
 net.core.netdev_max_backlog = 500000
 net.core.somaxconn = 65535
-net.ipv4.tcp_max_syn_backlog = 8192
+net.ipv4.tcp_max_syn_backlog = 16384
 
-# ===== TCP优化 =====
+# ===== 抢种强化（重点）=====
+net.ipv4.tcp_notsent_lowat = 8192
+net.ipv4.tcp_limit_output_bytes = 4194304
+net.ipv4.tcp_autocorking = 1
+net.ipv4.tcp_slow_start_after_idle = 0
+
+# ===== TCP基础 =====
 net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_fastopen = 3
-net.ipv4.tcp_fin_timeout = 15
+net.ipv4.tcp_fin_timeout = 10
 net.ipv4.tcp_tw_reuse = 1
-net.ipv4.tcp_slow_start_after_idle = 0
-net.ipv4.tcp_autocorking = 1
-
-# ===== BBR关键 =====
-net.ipv4.tcp_notsent_lowat = 16384
-net.ipv4.tcp_limit_output_bytes = $TCP_LIMIT
 
 # ===== 连接跟踪 =====
 net.netfilter.nf_conntrack_max = 2097152
@@ -404,7 +377,7 @@ vless_opt(){
     print_title "VLESS优化"
     
     # 第一步：检测系统调优并安装TCP算法
-    auto_install_bbr
+    enable_bbr_fq
     
     # 第二步：应用VLESS优化配置
 CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
@@ -429,19 +402,19 @@ net.ipv4.tcp_wmem = 4096 65536 134217728
 # ===== 并发 =====
 net.core.netdev_max_backlog = 500000
 net.core.somaxconn = 65535
-net.ipv4.tcp_max_syn_backlog = 8192
+net.ipv4.tcp_max_syn_backlog = 16384
 
-# ===== TCP优化 =====
+# ===== 抢种强化（重点）=====
+net.ipv4.tcp_notsent_lowat = 8192
+net.ipv4.tcp_limit_output_bytes = 4194304
+net.ipv4.tcp_autocorking = 1
+net.ipv4.tcp_slow_start_after_idle = 0
+
+# ===== TCP基础 =====
 net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_fastopen = 3
-net.ipv4.tcp_fin_timeout = 15
+net.ipv4.tcp_fin_timeout = 10
 net.ipv4.tcp_tw_reuse = 1
-net.ipv4.tcp_slow_start_after_idle = 0
-net.ipv4.tcp_autocorking = 1
-
-# ===== BBR关键 =====
-net.ipv4.tcp_notsent_lowat = 16384
-net.ipv4.tcp_limit_output_bytes = $TCP_LIMIT
 
 # ===== 连接跟踪 =====
 net.netfilter.nf_conntrack_max = 2097152
