@@ -227,53 +227,50 @@ install_tcp_algo() {
     pause
 }
 
-# ===== 自动安装TCP算法（集成在优化中） =====
 auto_install_bbr() {
-    print_info "开始执行系统优化和TCP算法安装..."
-    
-    # 步骤1: 检查并安装系统调优
-    check_and_install_tuning
-    
-    # 步骤2: 检查并安装BBR算法
-    print_info "检查并安装BBR算法..."
-    
-    # 获取当前TCP拥塞控制算法
-    CURRENT_CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "none")
-    
-    # 只检测BBRx和BBRv3，不检测原生BBR
-    if [[ "$CURRENT_CC" == "bbrx" ]] || [[ "$CURRENT_CC" == "bbr3" ]]; then
-        print_ok "已检测到优化算法 [$CURRENT_CC]，跳过自动安装。"
+    print_info "开始安装 BBR（优先 v3 -> v2）..."
+
+    apt-get update -y >/dev/null 2>&1
+    apt-get install -y wget curl >/dev/null 2>&1
+
+    CURRENT_CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+
+    if [[ "$CURRENT_CC" == "bbr3" ]] || [[ "$CURRENT_CC" == "bbr2" ]]; then
+        print_ok "已存在 BBR算法: $CURRENT_CC"
         return
     fi
-    
-    # 获取系统信息
-    RAM=$(free -m | awk '/Mem:/ {print $2}')
-    KERNEL_MAJOR=$(uname -r | cut -d. -f1)
-    KERNEL_MINOR=$(uname -r | cut -d. -f2)
-    KERNEL_VERSION_NUM=$((KERNEL_MAJOR * 1000 + KERNEL_MINOR))
-    
-    # 根据配置选择安装BBR版本
-    if [[ $KERNEL_VERSION_NUM -ge 5019 ]] && [[ $RAM -ge 2048 ]]; then
-        print_info "满足BBRv3安装条件，尝试安装BBRv3..."
-        install_by_jerry048 "bbrv3"
-    elif [[ $RAM -ge 1024 ]]; then
-        print_info "满足BBRx安装条件，尝试安装BBRx..."
-        install_by_jerry048 "bbrx"
+
+    # ===== 尝试 BBRv3 =====
+    print_info "尝试安装 BBRv3..."
+    bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -3
+
+    sleep 3
+    sysctl -w net.core.default_qdisc=fq >/dev/null 2>&1
+
+    CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+
+    if [[ "$CC" == "bbr3" ]]; then
+        print_ok "BBRv3 安装成功"
     else
-        print_info "条件不满足，使用原生BBR..."
-        enable_native_bbr
-    fi
-    
-    # 验证安装结果
-    sleep 2
-    CURRENT_CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "none")
-    if [[ "$CURRENT_CC" != "none" ]]; then
-        print_ok "TCP算法安装完成，当前算法: $CURRENT_CC"
-    else
-        print_err "TCP算法安装失败"
+        print_warn "BBRv3 失败，尝试 BBRv2..."
+
+        bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -2
+
+        sleep 3
+        sysctl -w net.core.default_qdisc=fq >/dev/null 2>&1
+
+        CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
+
+        if [[ "$CC" == "bbr2" ]]; then
+            print_ok "BBRv2 安装成功"
+        else
+            print_warn "BBRv2 失败，使用原生BBR"
+
+            sysctl -w net.core.default_qdisc=fq
+            sysctl -w net.ipv4.tcp_congestion_control=bbr
+        fi
     fi
 }
-
 
 # ===== 查看当前优化状态 =====
 view_optimization() {
@@ -341,94 +338,59 @@ pt_opt(){
     auto_install_bbr
     
     # 第二步：应用PT刷流优化配置
-    cat > $CONFIG_FILE <<EOF
-# 网络核心参数
-net.core.rmem_default = 8388608
-net.core.rmem_max = 134217728
-net.core.wmem_default = 8388608
-net.core.wmem_max = 134217728
-net.core.netdev_max_backlog = 100000
-net.core.somaxconn = 65535
-net.ipv4.tcp_max_syn_backlog = 65535
-net.ipv4.ip_local_port_range = 10000 65535
-fs.file-max = 4194304
-vm.swappiness = 10
+  CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
 
-# TCP参数优化
+if [[ "$CC" == "bbr2" ]]; then
+    TCP_LIMIT=4194304
+else
+    TCP_LIMIT=1048576
+fi
+
+cat > $CONFIG_FILE <<EOF
+# ===== 核心 =====
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+
+# ===== buffer =====
+net.core.rmem_max = 134217728
+net.core.wmem_max = 134217728
 net.ipv4.tcp_rmem = 4096 87380 134217728
 net.ipv4.tcp_wmem = 4096 65536 134217728
-net.ipv4.tcp_mem = 786432 1048576 1572864
-net.ipv4.tcp_tw_reuse = 1
-net.ipv4.tcp_fin_timeout = 30
-net.ipv4.tcp_keepalive_time = 1200
-net.ipv4.tcp_keepalive_probes = 3
-net.ipv4.tcp_keepalive_intvl = 15
-net.ipv4.tcp_fastopen = 3
+
+# ===== 并发 =====
+net.core.netdev_max_backlog = 500000
+net.core.somaxconn = 65535
+net.ipv4.tcp_max_syn_backlog = 8192
+
+# ===== TCP优化 =====
 net.ipv4.tcp_mtu_probing = 1
-net.ipv4.tcp_timestamps = 1
-net.ipv4.tcp_sack = 1
-net.ipv4.tcp_dsack = 1
-net.ipv4.tcp_fack = 1
-net.ipv4.tcp_ecn = 0
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_fin_timeout = 15
+net.ipv4.tcp_tw_reuse = 1
 net.ipv4.tcp_slow_start_after_idle = 0
-net.ipv4.tcp_no_metrics_save = 1
-net.ipv4.tcp_moderate_rcvbuf = 1
-net.ipv4.tcp_adv_win_scale = 1
-net.ipv4.tcp_app_win = 31
-net.ipv4.tcp_autocorking = 0
-net.ipv4.tcp_early_retrans = 3
-net.ipv4.tcp_limit_output_bytes = 262144
-net.ipv4.tcp_notsent_lowat = 4294967295
-net.ipv4.tcp_workaround_signed_windows = 0
-net.ipv4.tcp_fastopen_key = a1b2c3d4-0000111122223333
-net.ipv4.tcp_fastopen_blackhole_timeout_sec = 0
-net.ipv4.tcp_window_scaling = 1
-net.ipv4.tcp_tso_win_divisor = 3
+net.ipv4.tcp_autocorking = 1
 
-# 网络设备参数
-net.core.default_qdisc = fq
+# ===== BBR关键 =====
+net.ipv4.tcp_notsent_lowat = 16384
+net.ipv4.tcp_limit_output_bytes = $TCP_LIMIT
 
-# 连接跟踪
-net.netfilter.nf_conntrack_max = 524288
-net.netfilter.nf_conntrack_tcp_timeout_established = 432000
-net.netfilter.nf_conntrack_tcp_timeout_time_wait = 120
-net.netfilter.nf_conntrack_tcp_timeout_close_wait = 60
-net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 120
+# ===== 连接跟踪 =====
+net.netfilter.nf_conntrack_max = 2097152
 
-# 虚拟内存参数
-vm.dirty_ratio = 60
-vm.dirty_background_ratio = 5
-vm.dirty_expire_centisecs = 12000
-vm.dirty_writeback_centisecs = 1500
-vm.vfs_cache_pressure = 50
-vm.overcommit_memory = 1
-vm.overcommit_ratio = 100
-vm.min_free_kbytes = 65536
-vm.zone_reclaim_mode = 0
-vm.max_map_count = 262144
-vm.admin_reserve_kbytes = 8192
-vm.user_reserve_kbytes = 8192
+# ===== IPv6优化 =====
+net.ipv6.route.max_size = 2147483647
 
-# ===== IPv6优化参数 =====
-# 安全设置
-net.ipv6.conf.all.accept_ra = 0
-net.ipv6.conf.default.accept_ra = 0
-net.ipv6.conf.all.accept_redirects = 0
-net.ipv6.conf.default.accept_redirects = 0
-net.ipv6.conf.all.forwarding = 0
+net.ipv6.neigh.default.gc_thresh1 = 4096
+net.ipv6.neigh.default.gc_thresh2 = 8192
+net.ipv6.neigh.default.gc_thresh3 = 16384
 
-# 邻居表优化
-net.ipv6.neigh.default.gc_thresh1 = 1024
-net.ipv6.neigh.default.gc_thresh2 = 2048
-net.ipv6.neigh.default.gc_thresh3 = 4096
+net.ipv6.conf.all.accept_ra = 2
+net.ipv6.conf.default.accept_ra = 2
+net.ipv6.conf.all.use_tempaddr = 0
+net.ipv6.conf.all.forwarding = 1
 
-# TCP参数优化
+# ===== IPv6 TCP =====
 net.ipv6.tcp_mtu_probing = 1
-net.ipv6.tcp_congestion_control = bbr
-net.ipv6.tcp_slow_start_after_idle = 0
-net.ipv6.tcp_notsent_lowat = 4294967295
-net.ipv6.tcp_rmem = 4096 87380 134217728
-net.ipv6.tcp_wmem = 4096 65536 134217728
 EOF
     set_cc
     apply_sysctl
@@ -445,85 +407,59 @@ vless_opt(){
     auto_install_bbr
     
     # 第二步：应用VLESS优化配置
-    cat > $CONFIG_FILE <<EOF
-# 网络核心参数
-net.core.rmem_default = 8388608
-net.core.rmem_max = 134217728
-net.core.wmem_default = 8388608
-net.core.wmem_max = 134217728
-net.core.netdev_max_backlog = 20000
-net.core.somaxconn = 20000
-net.ipv4.tcp_fastopen = 3
-net.ipv4.tcp_mtu_probing = 1
+CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null)
 
-# TCP参数优化
+if [[ "$CC" == "bbr2" ]]; then
+    TCP_LIMIT=4194304
+else
+    TCP_LIMIT=1048576
+fi
+
+cat > $CONFIG_FILE <<EOF
+# ===== 核心 =====
+net.core.default_qdisc = fq
+net.ipv4.tcp_congestion_control = bbr
+
+# ===== buffer =====
+net.core.rmem_max = 134217728
+net.core.wmem_max = 134217728
 net.ipv4.tcp_rmem = 4096 87380 134217728
 net.ipv4.tcp_wmem = 4096 65536 134217728
-net.ipv4.tcp_mem = 786432 1048576 1572864
+
+# ===== 并发 =====
+net.core.netdev_max_backlog = 500000
+net.core.somaxconn = 65535
+net.ipv4.tcp_max_syn_backlog = 8192
+
+# ===== TCP优化 =====
+net.ipv4.tcp_mtu_probing = 1
+net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_fin_timeout = 15
 net.ipv4.tcp_tw_reuse = 1
-net.ipv4.tcp_fin_timeout = 30
-net.ipv4.tcp_keepalive_time = 1200
-net.ipv4.tcp_keepalive_probes = 3
-net.ipv4.tcp_keepalive_intvl = 15
-net.ipv4.tcp_timestamps = 1
-net.ipv4.tcp_sack = 1
-net.ipv4.tcp_dsack = 1
-net.ipv4.tcp_fack = 1
-net.ipv4.tcp_ecn = 0
 net.ipv4.tcp_slow_start_after_idle = 0
-net.ipv4.tcp_no_metrics_save = 1
-net.ipv4.tcp_moderate_rcvbuf = 1
-net.ipv4.tcp_adv_win_scale = 1
-net.ipv4.tcp_app_win = 31
-net.ipv4.tcp_autocorking = 0
-net.ipv4.tcp_early_retrans = 3
-net.ipv4.tcp_limit_output_bytes = 262144
-net.ipv4.tcp_notsent_lowat = 4294967295
-net.ipv4.tcp_workaround_signed_windows = 0
-net.ipv4.tcp_window_scaling = 1
-net.ipv4.tcp_tso_win_divisor = 3
+net.ipv4.tcp_autocorking = 1
 
-# 端口范围
-net.ipv4.ip_local_port_range = 10000 65535
+# ===== BBR关键 =====
+net.ipv4.tcp_notsent_lowat = 16384
+net.ipv4.tcp_limit_output_bytes = $TCP_LIMIT
 
-# 网络设备参数
-net.core.default_qdisc = fq
+# ===== 连接跟踪 =====
+net.netfilter.nf_conntrack_max = 2097152
 
-# 连接跟踪
-net.netfilter.nf_conntrack_max = 131072
-net.netfilter.nf_conntrack_tcp_timeout_established = 432000
-net.netfilter.nf_conntrack_tcp_timeout_time_wait = 120
-net.netfilter.nf_conntrack_tcp_timeout_close_wait = 60
-net.netfilter.nf_conntrack_tcp_timeout_fin_wait = 120
+# ===== IPv6优化 =====
+net.ipv6.route.max_size = 2147483647
 
-# 虚拟内存参数
-vm.swappiness = 10
-vm.dirty_ratio = 30
-vm.dirty_background_ratio = 10
-vm.dirty_expire_centisecs = 3000
-vm.dirty_writeback_centisecs = 500
-vm.vfs_cache_pressure = 50
-vm.overcommit_memory = 1
-vm.overcommit_ratio = 100
-vm.min_free_kbytes = 65536
-vm.zone_reclaim_mode = 0
-vm.max_map_count = 262144
+net.ipv6.neigh.default.gc_thresh1 = 4096
+net.ipv6.neigh.default.gc_thresh2 = 8192
+net.ipv6.neigh.default.gc_thresh3 = 16384
 
-# ===== IPv6优化参数 =====
-# 安全设置
-net.ipv6.conf.all.accept_ra = 0
-net.ipv6.conf.default.accept_ra = 0
-net.ipv6.conf.all.accept_redirects = 0
-net.ipv6.conf.default.accept_redirects = 0
-net.ipv6.conf.all.forwarding = 0
+net.ipv6.conf.all.accept_ra = 2
+net.ipv6.conf.default.accept_ra = 2
+net.ipv6.conf.all.use_tempaddr = 0
+net.ipv6.conf.all.forwarding = 1
 
-# TCP参数优化
+# ===== IPv6 TCP =====
 net.ipv6.tcp_mtu_probing = 1
-net.ipv6.tcp_congestion_control = bbr
-net.ipv6.tcp_slow_start_after_idle = 0
-net.ipv6.tcp_notsent_lowat = 4294967295
-net.ipv6.tcp_rmem = 4096 87380 134217728
-net.ipv6.tcp_wmem = 4096 65536 134217728
 EOF
     set_cc
     apply_sysctl
