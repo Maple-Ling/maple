@@ -318,10 +318,10 @@ echo -e "${CYAN}当前架构: $ARCH${NC}"
 
 # ===== 自动选择下载 =====
 if [[ "$ARCH" == "x86_64" ]]; then
-    QB_URL_DL="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.3.9_v1.2.15/x86_64-qbittorrent-nox"
+    QB_URL_DL="https://github.com/userdocs/qbittorrent-nox-static-legacy/releases/download/release-4.3.9_v1.2.20/x86_64-qbittorrent-nox"
 
 elif [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
-    QB_URL_DL="https://github.com/userdocs/qbittorrent-nox-static/releases/download/release-4.3.9_v1.2.15/aarch64-qbittorrent-nox"
+    QB_URL_DL="https://github.com/userdocs/qbittorrent-nox-static-legacy/releases/download/release-4.3.9_v1.2.20/aarch64-qbittorrent-nox"
 
 elif [[ "$ARCH" == arm* ]]; then
     print_err "不支持的ARM架构: $ARCH"
