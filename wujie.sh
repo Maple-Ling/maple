@@ -614,9 +614,11 @@ qb_install(){
     ARCH=$(uname -m)
     echo -e "${CYAN}当前架构: $ARCH${NC}"
     if [[ "$ARCH" == "x86_64" ]]; then
-        QB_URL_DL="https://github.com/userdocs/qbittorrent-nox-static-legacy/releases/download/release-4.3.9_v1.2.20/x86_64-qbittorrent-nox"
-    elif [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
-        QB_URL_DL="https://github.com/userdocs/qbittorrent-nox-static-legacy/releases/download/release-4.3.9_v1.2.20/aarch64-qbittorrent-nox"
+    # x86_64 架构，使用 qBittorrent-4.3.9 + libtorrent-v1.2.20 组合
+    QB_URL_DL="https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/Torrent%20Clients/qBittorrent/x86_64/qBittorrent-4.3.9%20-%20libtorrent-v1.2.20/qbittorrent-nox"
+elif [[ "$ARCH" == "aarch64" || "$ARCH" == "arm64" ]]; then
+    # ARM64 架构，需要对应目录
+    QB_URL_DL="https://raw.githubusercontent.com/jerry048/Seedbox-Components/main/Torrent%20Clients/qBittorrent/ARM64/qBittorrent-4.3.9%20-%20libtorrent-v1.2.20/qbittorrent-nox"
     elif [[ "$ARCH" == arm* ]]; then
         print_err "不支持的ARM架构: $ARCH"
         echo "建议使用 aarch64 VPS"
