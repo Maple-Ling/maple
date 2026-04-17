@@ -54,23 +54,35 @@ detect_current_cc() {
     CURRENT_QDISC=$(sysctl -n net.core.default_qdisc 2>/dev/null || echo "fq_codel")
     echo -e "${CYAN}当前TCP算法: $CURRENT_CC${NC}"
     echo -e "${CYAN}当前队列算法: $CURRENT_QDISC${NC}"
-    if [[ "$CURRENT_CC" == "bbr" || "$CURRENT_CC" == "bbr2" || "$CURRENT_CC" == "bbr3" ]]; then
-        echo -e "${GREEN}✅ 已启用BBR算法${NC}"
+    if [[ "$CURRENT_CC" == "bbr" || "$CURRENT_CC" == "bbr2" || "$CURRENT_CC" == "bbr3" || "$CURRENT_CC" == "bbrx" ]]; then
+        echo -e "${GREEN}✅ 已启用BBR系列算法${NC}"
         return 0
     else
-        echo -e "${YELLOW}⚠️ 未启用BBR算法${NC}"
+        echo -e "${YELLOW}⚠️ 未启用BBR系列算法${NC}"
         return 1
     fi
 }
 
-# ===== 检测是否安装了XanMod/BBRv3内核 =====
-detect_xanmod_kernel() {
-    if uname -r | grep -qi "xanmod" || dpkg -l | grep -q 'linux-xanmod'; then
-        echo -e "${GREEN}✅ 已安装XanMod/BBRv3内核${NC}"
+# ===== 检测是否安装了BBRx所需内核 =====
+detect_bbrx_kernel() {
+    # 检测BBRx模块是否已加载
+    if lsmod | grep -q bbrx || sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null | grep -q bbrx; then
+        echo -e "${GREEN}✅ 已安装BBRx内核模块${NC}"
         return 0
-    else
-        echo -e "${YELLOW}⚠️ 未检测到XanMod/BBRv3内核${NC}"
+    fi
+    
+    # 检测是否安装了较新的内核（BBRx通常需要较新内核）
+    local current_kernel=$(uname -r | cut -d'-' -f1)
+    local current_major=$(echo $current_kernel | cut -d'.' -f1)
+    local current_minor=$(echo $current_kernel | cut -d'.' -f2)
+    
+    # 假设4.9+内核支持BBRx，但建议5.4+
+    if [ $current_major -ge 5 ] || ([ $current_major -eq 4 ] && [ $current_minor -ge 9 ]); then
+        echo -e "${YELLOW}⚠️ 内核版本支持BBRx，但模块未加载${NC}"
         return 1
+    else
+        echo -e "${RED}❌ 内核版本过低，需要4.9+内核${NC}"
+        return 2
     fi
 }
 
@@ -121,7 +133,7 @@ run_system_tune() {
 # ===== 系统优化辅助函数 =====
 set_cc(){
     avail=$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null)
-    for i in bbr3 bbr2 bbrplus bbr
+    for i in bbrx bbr3 bbr2 bbrplus bbr
     do
         if echo $avail | grep -q $i; then
             sysctl -w net.ipv4.tcp_congestion_control=$i >/dev/null 2>&1
@@ -132,11 +144,11 @@ set_cc(){
     
     # 如果没有找到任何BBR算法，尝试安装内核
     print_warn "未找到BBR系列算法，将尝试安装优化内核..."
-    auto_install_bbrv3
+    auto_install_bbrx
     
     # 重新检测
     avail=$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null)
-    for i in bbr3 bbr2 bbr
+    for i in bbrx bbr3 bbr2 bbr
     do
         if echo $avail | grep -q $i; then
             sysctl -w net.ipv4.tcp_congestion_control=$i >/dev/null 2>&1
@@ -158,37 +170,112 @@ apply_sysctl(){
     fi
 }
 
-# ===== BBRv3 安装函数 =====
-auto_install_bbrv3() {
-    # 检测是否已经安装了xanmod内核
-    if detect_xanmod_kernel; then
-        print_ok "XanMod/BBRv3 内核已安装"
+# ===== 检测内核是否为最新 =====
+check_kernel_update() {
+    print_info "检测内核更新..."
+    
+    if [[ -f /etc/debian_version ]] || grep -qi "ubuntu" /etc/os-release; then
+        # Debian/Ubuntu系统
+        apt update >/dev/null 2>&1
+        kernel_updates=$(apt list --upgradable 2>/dev/null | grep -E "linux-image|linux-headers" | wc -l)
+        
+        if [ $kernel_updates -gt 0 ]; then
+            echo -e "${YELLOW}⚠️ 检测到内核更新可用${NC}"
+            apt list --upgradable 2>/dev/null | grep -E "linux-image|linux-headers"
+            
+            read -p "是否更新内核？(y/N，默认N): " update_kernel
+            if [[ $update_kernel =~ ^[Yy]$ ]]; then
+                print_info "正在更新内核..."
+                apt upgrade -y linux-image-* linux-headers-*
+                if [ $? -eq 0 ]; then
+                    print_ok "内核更新完成"
+                    echo -e "${YELLOW}[!] 需要重启系统以应用新内核${NC}"
+                    read -p "是否现在重启？(y/N，默认N): " reboot_now
+                    if [[ $reboot_now =~ ^[Yy]$ ]]; then
+                        reboot
+                    fi
+                else
+                    print_err "内核更新失败"
+                fi
+            else
+                print_warn "跳过内核更新"
+            fi
+        else
+            print_ok "内核已是最新版本"
+        fi
+    elif [[ -f /etc/redhat-release ]] || [[ -f /etc/centos-release ]]; then
+        # CentOS/RHEL系统
+        kernel_updates=$(yum check-update 2>/dev/null | grep -E "^kernel|^kernel-" | wc -l)
+        
+        if [ $kernel_updates -gt 0 ]; then
+            echo -e "${YELLOW}⚠️ 检测到内核更新可用${NC}"
+            yum check-update 2>/dev/null | grep -E "^kernel|^kernel-"
+            
+            read -p "是否更新内核？(y/N，默认N): " update_kernel
+            if [[ $update_kernel =~ ^[Yy]$ ]]; then
+                print_info "正在更新内核..."
+                yum update -y kernel kernel-*
+                if [ $? -eq 0 ]; then
+                    print_ok "内核更新完成"
+                    echo -e "${YELLOW}[!] 需要重启系统以应用新内核${NC}"
+                    read -p "是否现在重启？(y/N，默认N): " reboot_now
+                    if [[ $reboot_now =~ ^[Yy]$ ]]; then
+                        reboot
+                    fi
+                else
+                    print_err "内核更新失败"
+                fi
+            else
+                print_warn "跳过内核更新"
+            fi
+        else
+            print_ok "内核已是最新版本"
+        fi
+    else
+        print_warn "不支持的系统类型，跳过内核更新检测"
+    fi
+}
+
+# ===== BBRx 安装函数 =====
+auto_install_bbrx() {
+    # 检测是否已经安装了bbrx
+    if detect_bbrx_kernel; then
+        print_ok "BBRx 已安装"
         return
     fi
 
-    print_info "检测到未安装 BBRv3 优化内核，正在自动安装..."
-    local cpu_arch=$(uname -m)
+    # 在安装BBRx前检测内核更新
+    check_kernel_update
+    
+    print_info "检测到未安装 BBRx 优化内核，正在自动安装..."
+    
+    # 检查是否支持虚拟化环境
+    local virt_tech=$(systemd-detect-virt 2>/dev/null || echo "none")
+    if [[ "$virt_tech" == "lxc" || "$virt_tech" == "LXC" ]]; then
+        print_err "LXC容器不支持BBRx安装"
+        return 1
+    fi
 
-    if [ "$cpu_arch" = "x86_64" ]; then
-        print_info "正在安装 x86 版 XanMod 内核..."
-        apt update && apt install -y wget gnupg
+    # 检查操作系统类型
+    if [[ -f /etc/debian_version ]] || grep -qi "ubuntu" /etc/os-release; then
+        print_info "正在安装 BBRx (适用于Debian/Ubuntu)..."
+        echo -e "${YELLOW}[!] 正在下载并运行BBRx安装脚本，这可能需要几分钟...${NC}"
         
-        # 安装XanMod内核
-        wget -qO - https://dl.xanmod.org/archive.key | gpg --dearmor -o /usr/share/keyrings/xanmod-archive-keyring.gpg --yes
-        echo 'deb [signed-by=/usr/share/keyrings/xanmod-archive-keyring.gpg] http://deb.xanmod.org releases main' | tee /etc/apt/sources.list.d/xanmod-release.list
-        
-        local version=$(wget -qO- https://dl.xanmod.org/check_x86-64_psabi.sh | bash | grep -oP 'x86-64-v\K\d+')
-        [[ -z "$version" ]] && version="2"
-        
-        apt update -y && apt install -y linux-xanmod-x64v$version
-        
-        # 清理源列表
-        rm -f /etc/apt/sources.list.d/xanmod-release.list
-        
-        print_ok "XanMod 内核安装完成"
-        print_warn "注意：需要重启系统才能生效，请执行: reboot"
+        if bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -x; then
+            print_ok "BBRx 安装完成"
+            echo -e "${YELLOW}[!] 注意：需要重启系统才能生效，请执行: reboot${NC}"
+            return 0
+        else
+            print_err "BBRx 安装失败"
+            return 1
+        fi
+    elif [[ -f /etc/redhat-release ]] || [[ -f /etc/centos-release ]]; then
+        print_err "CentOS/RHEL系统暂不支持自动安装BBRx"
+        echo -e "${YELLOW}[!] 请手动安装较新内核后重试${NC}"
+        return 1
     else
-        print_info "架构 $cpu_arch，将启用原生BBR优化"
+        print_err "不支持的操作系统"
+        return 1
     fi
 }
 
@@ -201,14 +288,14 @@ pt_opt(){
     echo -e "${CYAN}[*] 检测当前系统状态...${NC}"
     detect_current_cc
     detect_tune_applied
-    detect_xanmod_kernel
+    detect_bbrx_kernel
     
     # 询问用户是否继续
     echo
     echo -e "${YELLOW}[!] 即将执行以下操作:${NC}"
     echo "1. 运行系统调优 (tune.sh -t)"
     echo "2. 应用PT刷流专用优化"
-    echo "3. 检测并安装BBRv3内核（如需）"
+    echo "3. 检测并安装BBRx内核（如需）"
     echo
     read -p "是否继续？(y/N): " confirm
     
@@ -270,15 +357,15 @@ EOF
     set_cc
     apply_sysctl
     
-    # 第三步：检测并安装BBRv3内核
-    auto_install_bbrv3
+    # 第三步：检测并安装BBRx内核
+    auto_install_bbrx
     
     # 显示最终状态
     echo
     echo -e "${CYAN}[*] 优化完成，最终状态:${NC}"
     detect_current_cc
     detect_tune_applied
-    detect_xanmod_kernel
+    detect_bbrx_kernel
     
     print_ok "PT刷流优化完成"
     echo -e "${YELLOW}[!] 提示：如果安装了新内核，需要重启系统${NC}"
@@ -294,14 +381,14 @@ vless_opt(){
     echo -e "${CYAN}[*] 检测当前系统状态...${NC}"
     detect_current_cc
     detect_tune_applied
-    detect_xanmod_kernel
+    detect_bbrx_kernel
     
     # 询问用户是否继续
     echo
     echo -e "${YELLOW}[!] 即将执行以下操作:${NC}"
     echo "1. 运行系统调优 (tune.sh -t)"
     echo "2. 应用VLESS节点专用优化"
-    echo "3. 检测并安装BBRv3内核（如需）"
+    echo "3. 检测并安装BBRx内核（如需）"
     echo
     read -p "是否继续？(y/N): " confirm
     
@@ -365,15 +452,15 @@ EOF
     set_cc
     apply_sysctl
     
-    # 第三步：检测并安装BBRv3内核
-    auto_install_bbrv3
+    # 第三步：检测并安装BBRx内核
+    auto_install_bbrx
     
     # 显示最终状态
     echo
     echo -e "${CYAN}[*] 优化完成，最终状态:${NC}"
     detect_current_cc
     detect_tune_applied
-    detect_xanmod_kernel
+    detect_bbrx_kernel
     
     print_ok "VLESS节点优化完成"
     echo -e "${YELLOW}[!] 提示：如果安装了新内核，需要重启系统${NC}"
@@ -397,8 +484,8 @@ view_optimization() {
     # 检测系统调优状态
     detect_tune_applied
     
-    # 检测BBRv3内核状态
-    detect_xanmod_kernel
+    # 检测BBRx内核状态
+    detect_bbrx_kernel
     
     # TCP拥塞控制算法
     echo -e "\n${GREEN}=== TCP拥塞控制算法 ===${NC}"
@@ -815,7 +902,7 @@ script_directory_menu() {
         case $choice in
             1) run_yuju_toolbox ;;
             2) run_kejilion_toolbox ;;
-            3) run_ipsentinel_toolbox ;;  # 添加这一行
+            3) run_ipsentinel_toolbox ;;
             0) break ;;
             *) print_err "无效选择，请重新输入"; sleep 1 ;;
         esac
