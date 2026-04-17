@@ -556,8 +556,10 @@ qb_login(){
 qb_optimize(){
     clear
     print_title "qBittorrent 性能优化"
+
     qb_stop
     mkdir -p /pt/qBittorrent/config
+
     cat > $QB_CONF <<EOF
 [Preferences]
 General\\Locale=zh
@@ -578,52 +580,78 @@ WebUI\\CSRFProtection=false
 WebUI\\ClickjackingProtection=false
 WebUI\\HostHeaderValidation=false
 EOF
+
     qb_start
     qb_login
+
+    # ==============================
+    # 📊 获取系统信息
+    # ==============================
     RAM=$(free -m | awk '/Mem:/ {print $2}')
     CPU=$(nproc)
     RAM_GB=$(( (RAM + 1023) / 1024 ))
-    if [[ $CPU -eq 1 ]] && [[ $RAM_GB -eq 1 ]]; then
-        max_conn=500
-        per_conn=100
-    elif [[ $CPU -eq 2 ]] && [[ $RAM_GB -eq 4 ]]; then
-        max_conn=2000
-        per_conn=200
-    elif [[ $CPU -ge 4 ]] && [[ $RAM_GB -ge 4 ]]; then
-        max_conn=-1
-        per_conn=-1
-    else
-        cpu_weight=$((CPU * 100))
-        ram_weight=$((RAM_GB * 25))
-        base_increase=$(( (cpu_weight + ram_weight) / 2 ))
-        per_increase=$(( (cpu_weight + ram_weight) / 20 ))
-        max_conn=$((500 + base_increase))
-        per_conn=$((100 + per_increase))
-        [ $max_conn -gt 2000 ] && max_conn=2000
-        [ $per_conn -gt 200 ] && per_conn=200
+
+    # ==============================
+    # ⚙️ 核心参数（你可以改这里）
+    # ==============================
+    BASE_CONN_PER_CPU=250        # 每核全局连接
+    BASE_PER_CONN_PER_CPU=25     # 每核每种连接
+    UPLOAD_RATIO=0.2             # 上传占连接比例（关键）
+    BUF_PER_CPU=4096             # 发送缓冲（KB）
+    BUF_LOW_PER_CPU=1024
+
+    # ==============================
+    # 🧠 内存微调（限制影响范围）
+    # ==============================
+    MEM_BASE=$((CPU * 2))
+    MEM_RATIO=$(awk "BEGIN {printf \"%.2f\", $RAM_GB/$MEM_BASE}")
+
+    if (( $(echo "$MEM_RATIO < 0.7" | bc -l) )); then
+        MEM_RATIO=0.7
+    elif (( $(echo "$MEM_RATIO > 1.3" | bc -l) )); then
+        MEM_RATIO=1.3
     fi
+
+    # ==============================
+    # 🔢 连接数（CPU主导）
+    # ==============================
+    max_conn=$(awk "BEGIN {printf \"%d\", $CPU * $BASE_CONN_PER_CPU * $MEM_RATIO}")
+    per_conn=$(awk "BEGIN {printf \"%d\", $CPU * $BASE_PER_CONN_PER_CPU * $MEM_RATIO}")
+
+    # ==============================
+    # 📤 上传槽（按比例，不再乱来）
+    # ==============================
+    upload=$(awk "BEGIN {printf \"%d\", $max_conn * $UPLOAD_RATIO}")
+    upload_t=$(awk "BEGIN {printf \"%d\", $per_conn * $UPLOAD_RATIO}")
+
+    # ==============================
+    # 💾 磁盘缓存（保持你原逻辑）
+    # ==============================
     cache=$((RAM/8))
     [ $cache -lt 32 ] && cache=32
     write=$((cache/4))
-    if [[ $CPU -eq 1 ]] && [[ $RAM_GB -eq 1 ]]; then
-        buf=2048
-        buf_low=512
-    elif [[ $CPU -ge 4 ]] && [[ $RAM_GB -ge 4 ]]; then
-        buf=10240
-        buf_low=3072
+
+    # ==============================
+    # 💽 async IO（恢复原脚本阶梯式逻辑）
+    # ==============================
+    if [ $CPU -le 1 ]; then
+        aio=4
+    elif [ $CPU -le 2 ]; then
+        aio=8
+    elif [ $CPU -le 4 ]; then
+        aio=16
     else
-        if [ $CPU -eq 1 ]; then buf=2048; buf_low=512
-        elif [ $CPU -eq 2 ]; then buf=4096; buf_low=1024
-        elif [ $CPU -eq 3 ]; then buf=6144; buf_low=1792
-        else buf=8192; buf_low=2048; fi
+        aio=32
     fi
-    upload=-1
-    upload_t=-1
-    if [ $CPU -le 1 ]; then aio=4
-    elif [ $CPU -le 2 ]; then aio=8
-    elif [ $CPU -le 4 ]; then aio=16
-    else aio=32; fi
+    
+    # ==============================
+    # 📡 send buffer（统一算法）
+    # ==============================
+    buf=$((BUF_PER_CPU * CPU))
+    buf_low=$((BUF_LOW_PER_CPU * CPU))
+
     mkdir -p /pt/downloads
+
     print_line
     echo -e "${GREEN}内存:${RAM}MB CPU:${CPU}${NC}"
     echo "连接: $max_conn / $per_conn"
@@ -632,6 +660,10 @@ EOF
     echo "缓冲: $buf / $buf_low"
     echo "AIO: $aio"
     print_line
+
+    # ==============================
+    # 🚀 写入 qB 配置
+    # ==============================
     curl -s -b $COOKIE --data-urlencode "json={
     \"max_connec\":$max_conn,
     \"max_connec_per_torrent\":$per_conn,
@@ -649,13 +681,16 @@ EOF
     \"web_ui_host_header_validation\":false,
     \"validate_https_tracker_certificate\":false
     }" $QB_URL/api/v2/app/setPreferences >/dev/null
+
     sleep 3
+
     curl -s -b $COOKIE --data-urlencode "json={
     \"enable_dht\":false,
     \"enable_pex\":false,
     \"enable_lsd\":false
     }" $QB_URL/api/v2/app/setPreferences >/dev/null
-    print_ok "优化完成（最终版）"
+
+    print_ok "优化完成（CPU自适应版）"
 }
 
 # ===== 种子备份 =====
