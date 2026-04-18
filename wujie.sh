@@ -560,6 +560,9 @@ qb_optimize(){
     qb_stop
     mkdir -p /pt/qBittorrent/config
 
+    # ==============================
+    # ⚙️ 生成基础配置文件
+    # ==============================
     cat > $QB_CONF <<EOF
 [Preferences]
 General\\Locale=zh
@@ -592,40 +595,35 @@ EOF
     RAM_GB=$(( (RAM + 1023) / 1024 ))
 
     # ==============================
-    # ⚙️ 核心参数（你可以改这里）
+    # 🔢 连接数与上传槽（基于 min(CPU, 内存GB) 的正确公式）
+    # 根据基准点推导：
+    # 1c2g -> [500, 50, 100, 10]   (min=1)
+    # 2c4g -> [1000, 100, 200, 20] (min=2)
+    # 4c8g -> [2000, 200, 400, 40] (min=4)
+    # 计算公式：参数 = min(CPU, 内存GB) * 系数
+    # 系数分别为：500, 50, 100, 10
     # ==============================
-    BASE_CONN_PER_CPU=250        # 每核全局连接
-    BASE_PER_CONN_PER_CPU=25     # 每核每种连接
-    UPLOAD_RATIO=0.2             # 上传占连接比例（关键）
-    BUF_PER_CPU=4096             # 发送缓冲（KB）
-    BUF_LOW_PER_CPU=1024
-
-    # ==============================
-    # 🧠 内存微调（限制影响范围）
-    # ==============================
-    MEM_BASE=$((CPU * 2))
-    MEM_RATIO=$(awk "BEGIN {printf \"%.2f\", $RAM_GB/$MEM_BASE}")
-
-    if (( $(echo "$MEM_RATIO < 0.7" | bc -l) )); then
-        MEM_RATIO=0.7
-    elif (( $(echo "$MEM_RATIO > 1.3" | bc -l) )); then
-        MEM_RATIO=1.3
+    # 1. 计算基准值：取CPU和内存GB的较小者
+    if [ $CPU -lt $RAM_GB ]; then
+        BASE_VALUE=$CPU
+    else
+        BASE_VALUE=$RAM_GB
     fi
 
-    # ==============================
-    # 🔢 连接数（CPU主导）
-    # ==============================
-    max_conn=$(awk "BEGIN {printf \"%d\", $CPU * $BASE_CONN_PER_CPU * $MEM_RATIO}")
-    per_conn=$(awk "BEGIN {printf \"%d\", $CPU * $BASE_PER_CONN_PER_CPU * $MEM_RATIO}")
+    # 2. 定义基准系数
+    COEFF_MAX_CONN=500
+    COEFF_PER_CONN=50
+    COEFF_UPLOAD=100
+    COEFF_UPLOAD_T=10
+
+    # 3. 计算最终参数
+    max_conn=$((BASE_VALUE * COEFF_MAX_CONN))
+    per_conn=$((BASE_VALUE * COEFF_PER_CONN))
+    upload=$((BASE_VALUE * COEFF_UPLOAD))
+    upload_t=$((BASE_VALUE * COEFF_UPLOAD_T))
 
     # ==============================
-    # 📤 上传槽（按比例，不再乱来）
-    # ==============================
-    upload=$(awk "BEGIN {printf \"%d\", $max_conn * $UPLOAD_RATIO}")
-    upload_t=$(awk "BEGIN {printf \"%d\", $per_conn * $UPLOAD_RATIO}")
-
-    # ==============================
-    # 💾 磁盘缓存（保持你原逻辑）
+    # 💾 磁盘缓存（保持原逻辑）
     # ==============================
     cache=$((RAM/8))
     [ $cache -lt 32 ] && cache=32
@@ -645,10 +643,33 @@ EOF
     fi
     
     # ==============================
-    # 📡 send buffer（统一算法）
+    # 📡 send buffer（设置合理上限）
     # ==============================
-    buf=$((BUF_PER_CPU * CPU))
-    buf_low=$((BUF_LOW_PER_CPU * CPU))
+    # 建议系数（单位：KB）- 已从原4096/1024调低
+    BUF_PER_CPU=2048
+    BUF_LOW_PER_CPU=512
+    
+    # 计算基础值
+    buf_base=$((BUF_PER_CPU * CPU))
+    buf_low_base=$((BUF_LOW_PER_CPU * CPU))
+    
+    # 设置安全上限（避免内存过载）
+    # 高水位线不超过12MB，低水位线不超过3MB
+    BUF_MAX=12288    # 12 * 1024 KB
+    BUF_LOW_MAX=3072 # 3 * 1024 KB
+    
+    # 应用上限
+    if [ $buf_base -gt $BUF_MAX ]; then
+        buf=$BUF_MAX
+    else
+        buf=$buf_base
+    fi
+    
+    if [ $buf_low_base -gt $BUF_LOW_MAX ]; then
+        buf_low=$BUF_LOW_MAX
+    else
+        buf_low=$buf_low_base
+    fi
 
     mkdir -p /pt/downloads
 
@@ -690,8 +711,9 @@ EOF
     \"enable_lsd\":false
     }" $QB_URL/api/v2/app/setPreferences >/dev/null
 
-    print_ok "优化完成（CPU自适应版）"
+    print_ok "优化完成（最终修正版）"
 }
+
 
 # ===== 种子备份 =====
 qb_backup(){
