@@ -859,6 +859,40 @@ qb_uninstall(){
     fi
     pause
 }
+# ===== 脚本自动更新功能 =====
+update_script() {
+    clear
+    print_title "检查脚本更新"
+    echo -e "${CYAN}正在检测远程版本...${NC}"
+    
+    local remote_url="https://raw.githubusercontent.com/Maple-Ling/maple/main/wujie.sh"
+    local local_path="/root/wujie.sh"
+    local temp_path="/tmp/wujie_update.sh"
+
+    # 下载远程脚本到临时目录
+    if ! curl -sL "$remote_url" -o "$temp_path"; then
+        print_err "下载失败，请检查网络连接。"
+        sleep 2
+        return
+    fi
+
+    # 对比 MD5 值判断是否需要更新
+    local local_md5=$(md5sum "$local_path" 2>/dev/null | awk '{print $1}')
+    local remote_md5=$(md5sum "$temp_path" | awk '{print $1}')
+
+    if [[ "$local_md5" == "$remote_md5" ]]; then
+        echo -e "${GREEN}当前已是最新版本，无需更新。${NC}"
+        rm -f "$temp_path"
+        sleep 2
+    else
+        echo -e "${YELLOW}检测到新版本，正在自动更新并重启...${NC}"
+        mv -f "$temp_path" "$local_path"
+        chmod +x "$local_path"
+        echo -e "${GREEN}更新成功！正在重新载入脚本...${NC}"
+        sleep 1
+        exec "$local_path"  # 使用 exec 替换当前进程，实现无感重启
+    fi
+}
 
 # ===== 简洁标题 =====
 print_simple_title() {
@@ -939,32 +973,243 @@ run_ipsentinel_toolbox() {
     cd - >/dev/null
     pause
 }
+run_reinstall_interactive() {
+    clear
+    print_title "LeitboGi0ro 全能系统重装 (DD)"
+
+    # 1. 选择系统大类
+    echo "请选择要安装的系统大类:"
+    echo "1. Debian (7-13)"
+    echo "2. Ubuntu (20.04, 22.04, 24.04)"
+    echo "3. CentOS (7, 8, 9-stream)"
+    echo "4. Alpine (3.16-3.18, edge)"
+    echo "5. Windows (10, 11, 2012, 2016, 2019, 2022)"
+    echo "6. Kali (rolling, dev, experimental)"
+    read -p "请输入序号 (1-6, 默认1): " sys_num
+
+    case $sys_num in
+        2) os_type="ubuntu" ;;
+        3) os_type="centos" ;;
+        4) os_type="alpine" ;;
+        5) os_type="windows" ;;
+        6) os_type="kali" ;;
+        *) os_type="debian" ;;
+    esac
+
+    # 2. 版本选择逻辑
+    echo -e "\n${YELLOW}提示: 直接回车将使用推荐版本${NC}"
+    case $os_type in
+        debian)  os_ver=${os_ver:-12} ;;
+        ubuntu)  os_ver=${os_ver:-22.04} ;;
+        windows) os_ver=${os_ver:-2022} ;;
+        alpine)  os_ver=${os_ver:-edge} ;;
+        *)       os_ver=${os_ver:-12} ;;
+    esac
+
+    # 3. 动态默认值与 Windows 专属参数
+    local lang_param=""
+    if [[ "$os_type" == "windows" ]]; then
+        default_port="3389"
+        default_pwd="Teddysun.com"
+        user_name="Administrator"
+        conn_type="RDP (远程桌面)"
+        
+        # Windows 语言选择
+        echo -e "\n请设置 Windows 语言 (cn: 简体中文, en: 英文, jp: 日文)"
+        read -p "请输入语言代码 (默认 cn): " win_lang
+        win_lang=${win_lang:-cn}
+        lang_param="-lang $win_lang"
+    else
+        default_port="22"
+        default_pwd="LeitboGi0ro"
+        user_name="root"
+        conn_type="SSH"
+    fi
+
+    # 4. 获取连接参数
+    echo ""
+    read -p "请输入 $conn_type 端口 (默认 $default_port): " ssh_port
+    ssh_port=${ssh_port:-$default_port}
+    
+    read -p "请输入新密码 (默认 $default_pwd): " ssh_pwd
+    ssh_pwd=${ssh_pwd:-$default_pwd}
+
+    # 5. 预览与确认
+    echo -e "\n--- 待执行配置 ---"
+    echo -e "安装系统: ${CYAN}$os_type $os_ver${NC}"
+    [[ "$os_type" == "windows" ]] && echo -e "系统语言: ${CYAN}$win_lang${NC}"
+    echo -e "登录用户: ${GREEN}$user_name${NC}"
+    echo -e "连接端口: ${CYAN}$ssh_port${NC}"
+    echo -e "系统密码: ${CYAN}$ssh_pwd${NC}"
+    print_line
+    
+    read -p "确认无误并开始重装吗？(y/N): " confirm
+    [[ ! "$confirm" =~ ^[Yy]$ ]] && return
+
+    # 6. 环境准备
+    echo -e "${CYAN}正在检查环境并下载脚本...${NC}"
+    if command -v apt-get &> /dev/null; then
+        apt-get update && apt-get install wget curl -y
+    elif command -v yum &> /dev/null; then
+        yum install wget curl -y
+    fi
+
+    wget --no-check-certificate -qO InstallNET.sh 'https://raw.githubusercontent.com/leitbogioro/Tools/master/Linux_reinstall/InstallNET.sh'
+    chmod a+x InstallNET.sh
+
+    # 7. 执行重装命令 (将参数动态拼接)
+    echo -e "${GREEN}脚本启动成功。请等待系统断开并开始 DD 安装。${NC}"
+    sleep 3
+    
+    # 执行行：注意这里的 $lang_param，非 Windows 时为空字符串
+    bash InstallNET.sh -${os_type} "${os_ver}" -port "${ssh_port}" -pwd "${ssh_pwd}" ${lang_param}
+}
+
+
+# 1. WARP-GO
+run_warp_go() {
+    clear
+    print_title "运行 WARP-GO"
+    echo -e "${CYAN}正在下载并运行 WARP-GO 脚本...${NC}"
+    wget -N https://gitlab.com/fscarmen/warp/-/raw/main/menu.sh && bash menu.sh
+    pause
+}
+
+# 2. 3x-ui (指定 v2.3.11)
+run_3x_ui() {
+    clear
+    print_title "运行 3x-ui (v2.3.11)"
+    echo -e "${CYAN}正在通过 curl 安装 3x-ui...${NC}"
+    bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh) v2.3.11
+    pause
+}
+
+# 3. 官方 x-ui
+run_vaxilu_xui() {
+    clear
+    print_title "运行 官方 x-ui"
+    bash <(curl -Ls https://raw.githubusercontent.com/vaxilu/x-ui/master/install.sh)
+    pause
+}
+
+# 4. FranzKafkaYu 版 x-ui
+run_franz_xui() {
+    clear
+    print_title "运行 FranzKafkaYu 版 x-ui"
+    bash <(curl -Ls https://raw.githubusercontent.com/FranzKafkaYu/x-ui/956bf85bbac978d56c0e319c5fac2d6db7df9564/install.sh)
+    pause
+}
+
+# 5. Alpine 版 x-ui (带依赖安装)
+run_alpine_xui() {
+    clear
+    print_title "运行 Alpine x-ui"
+    echo -e "${CYAN}正在安装依赖并启动脚本...${NC}"
+    apk add curl && apk add bash && bash <(curl -Ls https://raw.githubusercontent.com/Lynn-Becky/Alpine-x-ui/main/alpine-xui.sh)
+    pause
+}
+
+# 6. 一键 Hysteria2 (含自启动逻辑)
+run_hy2_full() {
+    clear
+    print_title "安装 Hysteria2"
+    echo -e "${CYAN}正在下载安装脚本...${NC}"
+    wget -N --no-check-certificate https://raw.githubusercontent.com/flame1ce/hysteria2-install/main/hysteria2-install-main/hy2/hysteria.sh && bash hysteria.sh
+    
+    echo -e "${GREEN}正在配置自启动并启动服务...${NC}"
+    systemctl enable hysteria-server.service
+    systemctl start hysteria-server.service
+    echo -e "${GREEN}Hysteria2 已完成安装并启动。${NC}"
+    pause
+}
+
+# 7. F大 sing-box
+run_fscarmen_singbox() {
+    clear
+    print_title "运行 fscarmen 版 sing-box"
+    bash <(wget -qO- https://raw.githubusercontent.com/fscarmen/sing-box/main/sing-box.sh)
+    pause
+}
+
+# 8. 233boy 版 sing-box
+run_233boy_singbox() {
+    clear
+    print_title "运行 233boy 版 sing-box"
+    bash <(wget -qO- -o- https://github.com/233boy/sing-box/raw/main/install.sh)
+    pause
+}
+run_sublinkx_install() {
+    clear
+    print_title "安装 sublinkX"
+    echo -e "${CYAN}正在下载并运行 sublinkX 安装脚本...${NC}"
+    # 使用 curl 下载并执行，保留了你提供的所有 Header 参数
+    curl -s -H "Cache-Control: no-cache" -H "Pragma: no-cache" https://raw.githubusercontent.com/gooaclok819/sublinkX/main/install.sh | sudo bash
+    pause
+}
+
 script_directory_menu() {
     while true; do
         clear
         print_simple_title
         print_title "脚本目录"
         echo "1. yuju 工具箱"
-        echo "   一款多功能 Linux 工具箱，包含系统优化、测试、工具下载等功能"
-        echo
         echo "2. 科技lion 工具箱"
-        echo "   强大的服务器管理工具箱，包含 Docker 管理、网站部署、系统优化等"
-        echo
         echo "3. 哨兵洗白ip养护"
-        echo "   强大的洗白ip工具"
-        echo
+        echo "4. 系统重装 (支持 Debian/Win/Alpine/Kali 等)"
+        echo "5. 节点管理 (x-ui / sing-box / Hy2 / WARP)"
+        echo "6. sublinkX 安装"
+        echo ""
         echo "0. 返回主菜单"
         print_line
-        read -p "请选择 (0-3): " choice
+        read -p "请选择 (0-6): " choice
         case $choice in
             1) run_yuju_toolbox ;;
             2) run_kejilion_toolbox ;;
             3) run_ipsentinel_toolbox ;;
+            4) run_reinstall_interactive ;;
+            5) node_management_menu ;;
+            6) run_sublinkx_install ;;
             0) break ;;
             *) print_err "无效选择，请重新输入"; sleep 1 ;;
         esac
     done
 }
+
+
+
+
+node_management_menu() {
+    while true; do
+        clear
+        print_simple_title
+        print_title "节点管理"
+        echo "1. WARP-GO 脚本 (F大)"
+        echo "2. 3x-ui 面板 (v2.3.11)"
+        echo "3. 官方 x-ui (vaxilu)"
+        echo "4. FranzKafkaYu 版 x-ui"
+        echo "5. Alpine 版 x-ui (轻量系统专用)"
+        echo "6. Hysteria2 一键安装 (含自启)"
+        echo "7. sing-box 一键脚本 (F大)"
+        echo "8. sing-box 一键脚本 (233boy,会默认安装vless,sb进入脚本配置)"
+        echo ""
+        echo "0. 返回上级菜单"
+        print_line
+        read -p "请选择 (0-8): " choice
+        case $choice in
+            1) run_warp_go ;;
+            2) run_3x_ui ;;
+            3) run_vaxilu_xui ;;
+            4) run_franz_xui ;;
+            5) run_alpine_xui ;;
+            6) run_hy2_full ;;
+            7) run_fscarmen_singbox ;;
+            8) run_233boy_singbox ;;
+            0) break ;;
+            *) print_err "无效选择，请重新输入"; sleep 1 ;;
+        esac
+    done
+}
+
 
 # ===== 主菜单 =====
 main_menu(){
@@ -976,6 +1221,7 @@ main_menu(){
         echo "3. 查看当前优化状态"
         echo "4. qBittorrent 管理"
         echo "5. 脚本目录"
+        echo "6. 检查脚本更新"
         echo "0. 退出"
         print_line
         read -p "请选择 (0-6): " choice
@@ -985,11 +1231,13 @@ main_menu(){
             3) view_optimization ;;
             4) qb_menu ;;
             5) script_directory_menu ;;
+            6) update_script ;;    # 调用更新函数
             0) clear; echo; echo "感谢使用！"; echo; exit 0 ;;
             *) print_err "无效选择，请重新输入"; sleep 1 ;;
         esac
     done
 }
+
 
 # ===== 脚本入口 =====
 if [[ $EUID -ne 0 ]]; then
