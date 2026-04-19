@@ -32,6 +32,23 @@ dk = hashlib.pbkdf2_hmac('sha512', password, salt, 100000, dklen=64)
 print(f'@ByteArray({base64.b64encode(salt).decode()}:{base64.b64encode(dk).decode()})')
 EOF
 }
+# ===== 设置快捷键 =====
+setup_shortcut() {
+    local script_path="/root/wujie.sh"
+    local bin_path="/usr/local/bin/wujie"
+
+    # 如果软链接已存在且指向正确，直接返回
+    if [ -L "$bin_path" ] && [ "$(readlink "$bin_path")" == "$script_path" ]; then
+        return
+    fi
+
+    # 删除旧的错误文件（如果有的话），创建新的软链接
+    rm -f "$bin_path"
+    ln -s "$script_path" "$bin_path"
+    chmod +x "$bin_path"
+    print_ok "快捷键 'wujie' 已全自动配置。"
+}
+
 
 # ===== 简洁的标题函数 =====
 print_title() {
@@ -1212,7 +1229,8 @@ node_management_menu() {
 
 
 # ===== 主菜单 =====
-main_menu(){
+# 统一使用首字母大写，确保调用一致
+Main_menu(){
     while true; do
         clear
         print_simple_title
@@ -1231,13 +1249,12 @@ main_menu(){
             3) view_optimization ;;
             4) qb_menu ;;
             5) script_directory_menu ;;
-            6) update_script ;;    # 调用更新函数
+            6) update_script ;;
             0) clear; echo; echo "感谢使用！"; echo; exit 0 ;;
             *) print_err "无效选择，请重新输入"; sleep 1 ;;
         esac
     done
 }
-
 
 # ===== 脚本入口 =====
 if [[ $EUID -ne 0 ]]; then
@@ -1245,4 +1262,9 @@ if [[ $EUID -ne 0 ]]; then
     echo "请使用: sudo bash $0"
     exit 1
 fi
-main_menu
+
+# 1. 静默执行快捷键配置 (函数内部已带判断，不会重复安装)
+setup_shortcut >/dev/null 2>&1
+
+# 2. 直接进入主菜单 (不再判断 $0，也不再强制退出)
+Main_menu
