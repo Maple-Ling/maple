@@ -35,7 +35,7 @@ EOF
 # ===== 设置快捷键 =====
 setup_shortcut() {
     local script_path="/root/wujie.sh"
-    local bin_path="/usr/local/bin/wujie"
+    local bin_path="/usr/local/bin/wj"
 
     # 如果软链接已存在且指向正确，直接返回
     if [ -L "$bin_path" ] && [ "$(readlink "$bin_path")" == "$script_path" ]; then
@@ -46,7 +46,7 @@ setup_shortcut() {
     rm -f "$bin_path"
     ln -s "$script_path" "$bin_path"
     chmod +x "$bin_path"
-    print_ok "快捷键 'wujie' 已全自动配置。"
+    print_ok "快捷键 'wj' 已全自动配置。"
 }
 
 
