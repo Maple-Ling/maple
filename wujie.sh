@@ -604,41 +604,58 @@ EOF
     qb_start
     qb_login
 
-    # ==============================
-    # 📊 获取系统信息
-    # ==============================
-    RAM=$(free -m | awk '/Mem:/ {print $2}')
-    CPU=$(nproc)
-    RAM_GB=$(( (RAM + 1023) / 1024 ))
+# ==============================
+# 📊 获取系统信息
+# ==============================
+RAM=$(free -m | awk '/Mem:/ {print $2}')
+CPU=$(nproc)
 
-    # ==============================
-    # 🔢 连接数与上传槽（基于 min(CPU, 内存GB) 的正确公式）
-    # 根据基准点推导：
-    # 1c2g -> [500, 50, 100, 10]   (min=1)
-    # 2c4g -> [1000, 100, 200, 20] (min=2)
-    # 4c8g -> [2000, 200, 400, 40] (min=4)
-    # 计算公式：参数 = min(CPU, 内存GB) * 系数
-    # 系数分别为：500, 50, 100, 10
-    # ==============================
-    # 1. 计算基准值：取CPU和内存GB的较小者
-    if [ $CPU -lt $RAM_GB ]; then
-        BASE_VALUE=$CPU
-    else
-        BASE_VALUE=$RAM_GB
-    fi
+# ==============================
+# 🔢 单位贡献（按你的模型）
+# ==============================
 
-    # 2. 定义基准系数
-    COEFF_MAX_CONN=500
-    COEFF_PER_CONN=50
-    COEFF_UPLOAD=100
-    COEFF_UPLOAD_T=10
+# CPU：1C = 250 / 50 / 100 / 50
+CPU_MAX=500
+CPU_PER=100
+CPU_UP=200
+CPU_UPT=100
 
-    # 3. 计算最终参数
-    max_conn=$((BASE_VALUE * COEFF_MAX_CONN))
-    per_conn=$((BASE_VALUE * COEFF_PER_CONN))
-    upload=$((BASE_VALUE * COEFF_UPLOAD))
-    upload_t=$((BASE_VALUE * COEFF_UPLOAD_T))
+# 内存：1G = 125 / 25 / 50 / 25（这里×2实现）
+RAM_MAX=250
+RAM_PER=50
+RAM_UP=100
+RAM_UPT=50
 
+# ==============================
+# 📐 内存换算（GB * 2，避免小数）
+# ==============================
+
+RAM_UNIT=$((RAM * 2 / 1024))
+
+# ==============================
+# 🚀 计算（全部×2）
+# ==============================
+
+max_conn_x2=$(( CPU * CPU_MAX + RAM_UNIT * RAM_MAX ))
+per_conn_x2=$(( CPU * CPU_PER + RAM_UNIT * RAM_PER ))
+upload_x2=$(( CPU * CPU_UP + RAM_UNIT * RAM_UP ))
+upload_t_x2=$(( CPU * CPU_UPT + RAM_UNIT * RAM_UPT ))
+
+# ==============================
+# 📉 还原（除2）
+# ==============================
+
+max_conn=$(( max_conn_x2 / 2 ))
+per_conn=$(( per_conn_x2 / 2 ))
+upload=$(( upload_x2 / 2 ))
+upload_t=$(( upload_t_x2 / 2 ))
+
+# ==============================
+# 🔒 单种限制（只限制这两个）
+# ==============================
+
+[ $per_conn -gt 300 ] && per_conn=300
+[ $upload_t -gt 150 ] && upload_t=150
     # ==============================
     # 💾 磁盘缓存（保持原逻辑）
     # ==============================
