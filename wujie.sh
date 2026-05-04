@@ -670,10 +670,10 @@ upload_t=$(( upload_t_x2 / 2 ))
         aio=4
     elif [ $CPU -le 2 ]; then
         aio=8
-    elif [ $CPU -le 4 ]; then
-        aio=16
+    elif [ $CPU -le 3 ]; then
+        aio=12
     else
-        aio=32
+        aio=16
     fi
     
     # ==============================
