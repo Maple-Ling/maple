@@ -251,13 +251,12 @@ net.ipv6.conf.all.use_tempaddr = 0
 net.ipv6.tcp_mtu_probing = 1
 EOF
     
-    set_cc
     apply_sysctl
     
-    # 删除所有状态显示和内核提示
-    print_ok “PT刷流优化完成”
+    print_ok "PT刷流优化完成"
     pause
 }
+
 
 # ===== VLESS优化 (稳定、低延迟) =====
 vless_opt(){
@@ -300,10 +299,6 @@ net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_fin_timeout = 10
 net.ipv4.tcp_tw_reuse = 1
 
-# ===== BBR/BBRx协同 =====
-net.ipv4.tcp_ecn = 1
-net.core.default_qdisc = fq
-
 # ===== 延迟优化 =====
 net.ipv4.tcp_early_retrans = 3
 net.ipv4.tcp_recovery = 1
@@ -330,13 +325,12 @@ net.ipv6.conf.all.use_tempaddr = 0
 net.ipv6.tcp_mtu_probing = 1
 EOF
     
-    set_cc
     apply_sysctl
     
-    # 删除所有状态显示和内核提示
-    print_ok “VLESS节点优化完成”
+    print_ok "VLESS节点优化完成"
     pause
 }
+
 
 # ===== 查看当前优化状态 =====
 view_optimization() {
