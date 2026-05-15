@@ -328,46 +328,50 @@ pt_opt(){
     # 第二步：应用PT专用优化
     print_info "应用PT刷流专用优化..."
     
-    cat > "$CONFIG_FILE" <<EOF
+cat > "$CONFIG_FILE" <<EOF
 # ===== PT刷流优化配置 =====
-# 目标：高并发、大吞吐、抢种性能
-# 注意：此配置在系统调优基础上叠加
+# 高并发 / 大吞吐 / 抢种优化
 
-# ===== 大缓冲区 (应对大量连接) =====
+# ===== 文件句柄 =====
+fs.file-max = 1048576
+
+# ===== 大缓冲区 =====
 net.core.rmem_max = 134217728
 net.core.wmem_max = 134217728
 net.ipv4.tcp_rmem = 4096 87380 134217728
 net.ipv4.tcp_wmem = 4096 65536 134217728
 
-# ===== 高并发连接 =====
-net.core.netdev_max_backlog = 500000
+# ===== 高并发 =====
+net.core.netdev_max_backlog = 65535
 net.core.somaxconn = 65535
 net.ipv4.tcp_max_syn_backlog = 16384
 
-# ===== 抢种强化 (降低延迟，快速发包) =====
+# ===== 抢种强化 =====
 net.ipv4.tcp_notsent_lowat = 8192
 net.ipv4.tcp_limit_output_bytes = 4194304
-net.ipv4.tcp_autocorking = 1
 net.ipv4.tcp_slow_start_after_idle = 0
 
-# ===== TCP基础优化 =====
+# ===== TCP优化 =====
 net.ipv4.tcp_mtu_probing = 1
-net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_fastopen = 1
 net.ipv4.tcp_fin_timeout = 10
-net.ipv4.tcp_tw_reuse = 1
 
-# ===== 连接跟踪表大小 (应对大量连接) =====
-net.netfilter.nf_conntrack_max = 2097152
+# ===== conntrack =====
+net.netfilter.nf_conntrack_max = $CONNTRACK
 
-# ===== IPv6优化 =====
+# ===== vm优化 =====
+vm.dirty_background_ratio = 5
+vm.dirty_ratio = 20
+vm.swappiness = 10
+
+# ===== IPv6 =====
 net.ipv6.route.max_size = 2147483647
 net.ipv6.neigh.default.gc_thresh1 = 4096
 net.ipv6.neigh.default.gc_thresh2 = 8192
 net.ipv6.neigh.default.gc_thresh3 = 16384
-net.ipv6.conf.all.accept_ra = 2
-net.ipv6.conf.default.accept_ra = 2
+net.ipv6.conf.all.accept_ra = 1
+net.ipv6.conf.default.accept_ra = 1
 net.ipv6.conf.all.use_tempaddr = 0
-net.ipv6.conf.all.forwarding = 1
 net.ipv6.tcp_mtu_probing = 1
 EOF
     
@@ -421,48 +425,66 @@ vless_opt(){
     # 第二步：应用VLESS专用优化
     print_info "应用VLESS节点专用优化..."
     
-    cat > "$CONFIG_FILE" <<EOF
+cat > "$CONFIG_FILE" <<EOF
 # ===== VLESS节点优化配置 =====
-# 目标：稳定、低延迟、公平共享带宽
-# 注意：此配置在系统调优基础上叠加
+# 目标：高并发 / 低延迟 / 稳定性
+# 适用于：Xray / sing-box / Reality / Hysteria2
 
-# ===== 均衡缓冲区 (避免单连接占用过多内存) =====
-net.core.rmem_max = 33554432
-net.core.wmem_max = 33554432
-net.ipv4.tcp_rmem = 4096 87380 33554432
-net.ipv4.tcp_wmem = 4096 16384 33554432
+# ===== 文件句柄 =====
+fs.file-max = 1048576
 
-# ===== 适中并发连接 =====
-net.core.netdev_max_backlog = 100000
-net.core.somaxconn = 32768
-net.ipv4.tcp_max_syn_backlog = 8192
+# ===== 高性能缓冲区 =====
+net.core.rmem_max = 67108864
+net.core.wmem_max = 67108864
+net.core.rmem_default = 262144
+net.core.wmem_default = 262144
 
-# ===== 延迟优化 (启用TCP早期重传与快速恢复) =====
-net.ipv4.tcp_early_retrans = 3
-net.ipv4.tcp_recovery = 1
-net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_rmem = 4096 262144 67108864
+net.ipv4.tcp_wmem = 4096 65536 67108864
 
-# ===== TCP基础优化 =====
-net.ipv4.tcp_mtu_probing = 1
+net.ipv4.udp_rmem_min = 16384
+net.ipv4.udp_wmem_min = 16384
+
+# ===== 高并发 =====
+net.core.netdev_max_backlog = 250000
+net.core.somaxconn = 65535
+net.ipv4.tcp_max_syn_backlog = 32768
+net.ipv4.tcp_max_tw_buckets = 2000000
+
+# ===== TCP优化 =====
 net.ipv4.tcp_fastopen = 3
+net.ipv4.tcp_slow_start_after_idle = 0
+net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_fin_timeout = 10
 net.ipv4.tcp_tw_reuse = 1
 
-# ===== 启用ECN (显式拥塞通知，与BBR协作更好) =====
+# ===== BBR/BBRx协同 =====
 net.ipv4.tcp_ecn = 1
+net.core.default_qdisc = fq
 
-# ===== 连接跟踪表大小 =====
-net.netfilter.nf_conntrack_max = 524288
+# ===== 延迟优化 =====
+net.ipv4.tcp_early_retrans = 3
+net.ipv4.tcp_recovery = 1
+
+# ===== conntrack =====
+net.netfilter.nf_conntrack_max = 1048576
+
+# ===== vm优化 =====
+vm.swappiness = 10
+vm.dirty_background_ratio = 5
+vm.dirty_ratio = 20
 
 # ===== IPv6优化 =====
-net.ipv6.route.max_size = 524288
-net.ipv6.neigh.default.gc_thresh1 = 2048
-net.ipv6.neigh.default.gc_thresh2 = 4096
-net.ipv6.neigh.default.gc_thresh3 = 8192
-net.ipv6.conf.all.accept_ra = 2
-net.ipv6.conf.default.accept_ra = 2
+net.ipv6.route.max_size = 1048576
+net.ipv6.neigh.default.gc_thresh1 = 4096
+net.ipv6.neigh.default.gc_thresh2 = 8192
+net.ipv6.neigh.default.gc_thresh3 = 16384
+
+net.ipv6.conf.all.accept_ra = 1
+net.ipv6.conf.default.accept_ra = 1
+
 net.ipv6.conf.all.use_tempaddr = 0
-net.ipv6.conf.all.forwarding = 1
+
 net.ipv6.tcp_mtu_probing = 1
 EOF
     
@@ -608,6 +630,17 @@ EOF
 # 📊 获取系统信息
 # ==============================
 RAM=$(free -m | awk '/Mem:/ {print $2}')
+MEM_GB=$((RAM / 1024))
+
+if [ $MEM_GB -le 1 ]; then
+    CONNTRACK=262144
+elif [ $MEM_GB -le 2 ]; then
+    CONNTRACK=524288
+elif [ $MEM_GB -le 4 ]; then
+    CONNTRACK=1048576
+else
+    CONNTRACK=2097152
+fi
 CPU=$(nproc)
 
 # ==============================
@@ -630,7 +663,7 @@ RAM_UPT=50
 # 📐 内存换算（GB * 2，避免小数）
 # ==============================
 
-RAM_UNIT=$((RAM * 2 / 1024))
+RAM_UNIT=$(((RAM + 511) * 2 / 1024))
 
 # ==============================
 # 🚀 计算（全部×2）
@@ -818,6 +851,8 @@ After=network.target
 [Service]
 ExecStart=$QB_BIN --profile=/pt
 Restart=always
+LimitNOFILE=1048576
+LimitNPROC=65535
 [Install]
 WantedBy=multi-user.target
 EOF
