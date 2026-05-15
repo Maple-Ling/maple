@@ -80,29 +80,6 @@ detect_current_cc() {
     fi
 }
 
-# ===== 检测是否安装了BBRx所需内核 =====
-detect_bbrx_kernel() {
-    # 检测BBRx模块是否已加载
-    if lsmod | grep -q bbrx || sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null | grep -q bbrx; then
-        echo -e "${GREEN}✅ 已安装BBRx内核模块${NC}"
-        return 0
-    fi
-    
-    # 检测是否安装了较新的内核（BBRx通常需要较新内核）
-    local current_kernel=$(uname -r | cut -d'-' -f1)
-    local current_major=$(echo $current_kernel | cut -d'.' -f1)
-    local current_minor=$(echo $current_kernel | cut -d'.' -f2)
-    
-    # 假设4.9+内核支持BBRx，但建议5.4+
-    if [ $current_major -ge 5 ] || ([ $current_major -eq 4 ] && [ $current_minor -ge 9 ]); then
-        echo -e "${YELLOW}⚠️ 内核版本支持BBRx，但模块未加载${NC}"
-        return 1
-    else
-        echo -e "${RED}❌ 内核版本过低，需要4.9+内核${NC}"
-        return 2
-    fi
-}
-
 # ===== 检测系统调优脚本是否已运行 =====
 detect_tune_applied() {
     # 检测标志文件是否存在
@@ -187,85 +164,8 @@ apply_sysctl(){
     fi
 }
 
-# ===== 检测内核是否为最新 =====
-check_kernel_update() {
-    print_info "检测内核更新..."
-    
-    if [[ -f /etc/debian_version ]] || grep -qi "ubuntu" /etc/os-release; then
-        # Debian/Ubuntu系统
-        apt update >/dev/null 2>&1
-        kernel_updates=$(apt list --upgradable 2>/dev/null | grep -E "linux-image|linux-headers" | wc -l)
-        
-        if [ $kernel_updates -gt 0 ]; then
-            echo -e "${YELLOW}⚠️ 检测到内核更新可用${NC}"
-            apt list --upgradable 2>/dev/null | grep -E "linux-image|linux-headers"
-            
-            read -p "是否更新内核？(y/N，默认N): " update_kernel
-            if [[ $update_kernel =~ ^[Yy]$ ]]; then
-                print_info "正在更新内核..."
-                apt upgrade -y linux-image-* linux-headers-*
-                if [ $? -eq 0 ]; then
-                    print_ok "内核更新完成"
-                    echo -e "${YELLOW}[!] 需要重启系统以应用新内核${NC}"
-                    read -p "是否现在重启？(y/N，默认N): " reboot_now
-                    if [[ $reboot_now =~ ^[Yy]$ ]]; then
-                        reboot
-                    fi
-                else
-                    print_err "内核更新失败"
-                fi
-            else
-                print_warn "跳过内核更新"
-            fi
-        else
-            print_ok "内核已是最新版本"
-        fi
-    elif [[ -f /etc/redhat-release ]] || [[ -f /etc/centos-release ]]; then
-        # CentOS/RHEL系统
-        kernel_updates=$(yum check-update 2>/dev/null | grep -E "^kernel|^kernel-" | wc -l)
-        
-        if [ $kernel_updates -gt 0 ]; then
-            echo -e "${YELLOW}⚠️ 检测到内核更新可用${NC}"
-            yum check-update 2>/dev/null | grep -E "^kernel|^kernel-"
-            
-            read -p "是否更新内核？(y/N，默认N): " update_kernel
-            if [[ $update_kernel =~ ^[Yy]$ ]]; then
-                print_info "正在更新内核..."
-                yum update -y kernel kernel-*
-                if [ $? -eq 0 ]; then
-                    print_ok "内核更新完成"
-                    echo -e "${YELLOW}[!] 需要重启系统以应用新内核${NC}"
-                    read -p "是否现在重启？(y/N，默认N): " reboot_now
-                    if [[ $reboot_now =~ ^[Yy]$ ]]; then
-                        reboot
-                    fi
-                else
-                    print_err "内核更新失败"
-                fi
-            else
-                print_warn "跳过内核更新"
-            fi
-        else
-            print_ok "内核已是最新版本"
-        fi
-    else
-        print_warn "不支持的系统类型，跳过内核更新检测"
-    fi
-}
-
 # ===== BBRx 安装函数 =====
 auto_install_bbrx() {
-    # 检测是否已经安装了bbrx
-    if detect_bbrx_kernel; then
-        print_ok "BBRx 已安装"
-        return
-    fi
-
-    # 在安装BBRx前检测内核更新
-    check_kernel_update
-    
-    print_info "检测到未安装 BBRx 优化内核，正在自动安装..."
-    
     # 检查是否支持虚拟化环境
     local virt_tech=$(systemd-detect-virt 2>/dev/null || echo "none")
     if [[ "$virt_tech" == "lxc" || "$virt_tech" == "LXC" ]]; then
@@ -300,30 +200,6 @@ auto_install_bbrx() {
 pt_opt(){
     clear
     print_title "PT刷流优化"
-    
-    # 显示当前状态
-    echo -e "${CYAN}[*] 检测当前系统状态...${NC}"
-    detect_current_cc
-    detect_tune_applied
-    detect_bbrx_kernel
-    
-    # 询问用户是否继续
-    echo
-    echo -e "${YELLOW}[!] 即将执行以下操作:${NC}"
-    echo "1. 运行系统调优 (tune.sh -t)"
-    echo "2. 应用PT刷流专用优化"
-    echo "3. 检测并安装BBRx内核（如需）"
-    echo
-    read -p "是否继续？(y/N): " confirm
-    
-    if [[ ! $confirm =~ ^[Yy]$ ]]; then
-        print_warn "操作已取消"
-        pause
-        return
-    fi
-    
-    # 第一步：运行系统调优
-    run_system_tune
     
     # 第二步：应用PT专用优化
     print_info "应用PT刷流专用优化..."
@@ -378,18 +254,8 @@ EOF
     set_cc
     apply_sysctl
     
-    # 第三步：检测并安装BBRx内核
-    auto_install_bbrx
-    
-    # 显示最终状态
-    echo
-    echo -e "${CYAN}[*] 优化完成，最终状态:${NC}"
-    detect_current_cc
-    detect_tune_applied
-    detect_bbrx_kernel
-    
-    print_ok "PT刷流优化完成"
-    echo -e "${YELLOW}[!] 提示：如果安装了新内核，需要重启系统${NC}"
+    # 删除所有状态显示和内核提示
+    print_ok “PT刷流优化完成”
     pause
 }
 
@@ -397,30 +263,6 @@ EOF
 vless_opt(){
     clear
     print_title "VLESS节点优化"
-    
-    # 显示当前状态
-    echo -e "${CYAN}[*] 检测当前系统状态...${NC}"
-    detect_current_cc
-    detect_tune_applied
-    detect_bbrx_kernel
-    
-    # 询问用户是否继续
-    echo
-    echo -e "${YELLOW}[!] 即将执行以下操作:${NC}"
-    echo "1. 运行系统调优 (tune.sh -t)"
-    echo "2. 应用VLESS节点专用优化"
-    echo "3. 检测并安装BBRx内核（如需）"
-    echo
-    read -p "是否继续？(y/N): " confirm
-    
-    if [[ ! $confirm =~ ^[Yy]$ ]]; then
-        print_warn "操作已取消"
-        pause
-        return
-    fi
-    
-    # 第一步：运行系统调优
-    run_system_tune
     
     # 第二步：应用VLESS专用优化
     print_info "应用VLESS节点专用优化..."
@@ -491,18 +333,8 @@ EOF
     set_cc
     apply_sysctl
     
-    # 第三步：检测并安装BBRx内核
-    auto_install_bbrx
-    
-    # 显示最终状态
-    echo
-    echo -e "${CYAN}[*] 优化完成，最终状态:${NC}"
-    detect_current_cc
-    detect_tune_applied
-    detect_bbrx_kernel
-    
-    print_ok "VLESS节点优化完成"
-    echo -e "${YELLOW}[!] 提示：如果安装了新内核，需要重启系统${NC}"
+    # 删除所有状态显示和内核提示
+    print_ok “VLESS节点优化完成”
     pause
 }
 
@@ -522,9 +354,6 @@ view_optimization() {
     
     # 检测系统调优状态
     detect_tune_applied
-    
-    # 检测BBRx内核状态
-    detect_bbrx_kernel
     
     # TCP拥塞控制算法
     echo -e "\n${GREEN}=== TCP拥塞控制算法 ===${NC}"
@@ -1066,13 +895,43 @@ run_reinstall_interactive() {
     esac
 
     # 2. 版本选择逻辑
-    echo -e "\n${YELLOW}提示: 直接回车将使用推荐版本${NC}"
+    echo -e “\n${YELLOW}提示: 直接回车将使用推荐版本${NC}”
+    
+    # 根据系统类型设置默认版本
     case $os_type in
-        debian)  os_ver=${os_ver:-12} ;;
-        ubuntu)  os_ver=${os_ver:-22.04} ;;
-        windows) os_ver=${os_ver:-2022} ;;
-        alpine)  os_ver=${os_ver:-edge} ;;
-        *)       os_ver=${os_ver:-12} ;;
+        debian)  
+            default_ver="12"
+            read -p "请输入 Debian 版本 (7/8/9/10/11/12/13, 默认 $default_ver): " input_ver
+            os_ver=${input_ver:-$default_ver}
+            ;;
+        ubuntu)  
+            default_ver="22.04"
+            read -p "请输入 Ubuntu 版本 (20.04/22.04/24.04, 默认 $default_ver): " input_ver
+            os_ver=${input_ver:-$default_ver}
+            ;;
+        centos)  
+            default_ver="9-stream"
+            read -p "请输入 CentOS 版本 (7/8/9-stream, 默认 $default_ver): " input_ver
+            os_ver=${input_ver:-$default_ver}
+            ;;
+        alpine)  
+            default_ver="edge"
+            read -p "请输入 Alpine 版本 (3.16/3.17/3.18/edge, 默认 $default_ver): " input_ver
+            os_ver=${input_ver:-$default_ver}
+            ;;
+        windows) 
+            default_ver="2022"
+            read -p "请输入 Windows 版本 (10/11/2012/2016/2019/2022, 默认 $default_ver): " input_ver
+            os_ver=${input_ver:-$default_ver}
+            ;;
+        kali)    
+            default_ver="rolling"
+            read -p "请输入 Kali 版本 (rolling/dev/experimental, 默认 $default_ver): " input_ver
+            os_ver=${input_ver:-$default_ver}
+            ;;
+        *)       
+            os_ver="12" 
+            ;;
     esac
 
     # 3. 动态默认值与 Windows 专属参数
@@ -1131,7 +990,30 @@ run_reinstall_interactive() {
     sleep 3
     
     # 执行行：注意这里的 $lang_param，非 Windows 时为空字符串
+    echo -e "${YELLOW}====== 开始执行DD系统重装配置 ======${NC}"
+    echo -e "${CYAN}以下将显示DD配置脚本的输出：${NC}"
+    print_line
     bash InstallNET.sh -${os_type} "${os_ver}" -port "${ssh_port}" -pwd "${ssh_pwd}" ${lang_param}
+    
+    # 保留DD脚本的输出界面，并明确提示后续操作
+    print_line
+    echo
+    echo "========================================"
+    echo -e "${GREEN} DD 配置脚本已执行完毕 ${NC}"
+    echo "========================================"
+    echo
+    echo -e "${YELLOW}重要提示：${NC}"
+    echo -e "1. 请仔细检查上方输出，确认配置信息无误。"
+    echo -e "2. 如果配置成功，通常需要 ${CYAN}重启系统${NC} 以启动真正的DD安装流程。"
+    echo -e "3. 如果看到错误信息，请根据提示解决后再试。"
+    echo
+    echo -e "按下 ${GREEN}回车键${NC} 将完全退出本优化脚本，之后您可以自行执行 'reboot' 重启。"
+    echo -e "（此举是为了避免自动跳回主菜单，覆盖上面的重要信息）"
+    echo
+    read -p "按回车键退出..." </dev/tty
+    
+    # 最终退出整个脚本，不再返回任何菜单
+    exit 0
 }
 
 
@@ -1216,6 +1098,36 @@ run_sublinkx_install() {
     pause
 }
 
+# ===== 系统内核与调优菜单 =====
+system_tune_menu() {
+    while true; do
+        clear
+        print_simple_title
+        print_title "系统内核与调优"
+        echo "1. 运行系统调优 (tune.sh -t)"
+        echo "2. 检测并安装 BBRx 内核"
+        echo "3. 返回上级菜单"
+        print_line
+        read -p "请选择 (1-3): " choice
+        case $choice in
+            1) 
+                clear
+                print_title "运行系统调优"
+                run_system_tune
+                pause
+                ;;
+            2) 
+                clear
+                print_title "安装 BBRx 内核"
+                auto_install_bbrx
+                pause
+                ;;
+            3) break ;;
+            *) print_err "无效选择，请重新输入"; sleep 1 ;;
+        esac
+    done
+}
+
 script_directory_menu() {
     while true; do
         clear
@@ -1226,23 +1138,26 @@ script_directory_menu() {
         echo "3. 哨兵洗白ip养护"
         echo "4. 系统重装 (支持 Debian/Win/Alpine/Kali 等)"
         echo "5. 节点管理 (x-ui / sing-box / Hy2 / WARP)"
-        echo "6. sublinkX 安装"
+        echo "6. 系统内核与调优"
+        echo "7. sublinkX 安装"
         echo ""
         echo "0. 返回主菜单"
         print_line
-        read -p "请选择 (0-6): " choice
+        read -p "请选择 (0-7): " choice
         case $choice in
             1) run_yuju_toolbox ;;
             2) run_kejilion_toolbox ;;
             3) run_ipsentinel_toolbox ;;
             4) run_reinstall_interactive ;;
             5) node_management_menu ;;
-            6) run_sublinkx_install ;;
+            6) system_tune_menu ;;
+            7) run_sublinkx_install ;;
             0) break ;;
             *) print_err "无效选择，请重新输入"; sleep 1 ;;
         esac
     done
 }
+
 
 
 
