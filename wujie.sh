@@ -233,6 +233,7 @@ net.ipv4.tcp_fin_timeout = 10
 net.ipv4.tcp_window_scaling = 1
 net.ipv4.tcp_congestion_control = bbr
 net.core.default_qdisc = fq
+net.ipv4.tcp_challenge_ack_limit = 1000000
 
 # ===== conntrack =====
 net.netfilter.nf_conntrack_max = $CONNTRACK
@@ -305,6 +306,7 @@ net.ipv4.tcp_fin_timeout = 10
 net.ipv4.tcp_tw_reuse = 1
 net.ipv4.tcp_congestion_control = bbr
 net.core.default_qdisc = fq_codel
+net.ipv4.tcp_challenge_ack_limit = 1000000
 
 # ===== 延迟优化 =====
 net.ipv4.tcp_early_retrans = 3
