@@ -206,12 +206,12 @@ pt_opt(){
     
 cat > "$CONFIG_FILE" <<EOF
 # ===== PT刷流优化配置 =====
-# 10G网卡专用 / 高并发 / 大吞吐 / 抢种优化 / 不限带宽
+# 10G/千兆通用｜高并发抢种｜欧洲弱链路兼容｜不限带宽
 
 # ===== 文件句柄 =====
 fs.file-max = 2097152
 
-# ===== 10G专用超大TCP缓冲区（跑满10G关键） =====
+# ===== 超大TCP缓冲区（10G/千兆通用） =====
 net.core.rmem_max = 268435456
 net.core.wmem_max = 268435456
 net.ipv4.tcp_rmem = 4096 131072 268435456
@@ -222,11 +222,11 @@ net.core.netdev_max_backlog = 262144
 net.core.somaxconn = 65535
 net.ipv4.tcp_max_syn_backlog = 65535
 
-# ===== 抢种强化【已删除限速参数tcp_limit_output_bytes】 =====
+# ===== 抢种强化 =====
 net.ipv4.tcp_notsent_lowat = 8192
 net.ipv4.tcp_slow_start_after_idle = 0
 
-# ===== TCP优化 + BBR 10G必开 =====
+# ===== TCP+BBR 标配 =====
 net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_fin_timeout = 10
@@ -234,10 +234,15 @@ net.ipv4.tcp_window_scaling = 1
 net.ipv4.tcp_congestion_control = bbr
 net.core.default_qdisc = fq
 
+# ===== 关键：小队列虚拟网卡·欧洲跨境PT专用 =====
+# 仅对256队列小鸡生效；德国大队列物理机自动无负面影响
+net.ipv4.tcp_window_max_shifts = 1
+net.ipv4.tcp_challenge_ack_limit = 1000000
+
 # ===== conntrack =====
 net.netfilter.nf_conntrack_max = $CONNTRACK
 
-# ===== vm优化（10G大吞吐写盘+2核低负载） =====
+# ===== 大吞吐写盘优化 =====
 vm.dirty_background_ratio = 3
 vm.dirty_ratio = 15
 vm.swappiness = 5
@@ -254,6 +259,7 @@ net.ipv6.conf.default.accept_ra = 1
 net.ipv6.conf.all.use_tempaddr = 0
 net.ipv6.tcp_mtu_probing = 1
 EOF
+
     
     apply_sysctl
     
