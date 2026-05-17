@@ -304,7 +304,7 @@ net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_fin_timeout = 10
 net.ipv4.tcp_tw_reuse = 1
 net.ipv4.tcp_congestion_control = bbr
-net.core.default_qdisc = fq
+net.core.default_qdisc = fq_codel
 
 # ===== 延迟优化 =====
 net.ipv4.tcp_early_retrans = 3
