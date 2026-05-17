@@ -196,55 +196,59 @@ auto_install_bbrx() {
     fi
 }
 
-# ===== PT优化 (高并发、大吞吐、抢种) =====
+# ===== PT优化 (10G网卡·高并发、大吞吐、抢种·无带宽限制) =====
 pt_opt(){
     clear
     print_title "PT刷流优化"
     
     # 第二步：应用PT专用优化
-    print_info "应用PT刷流专用优化..."
+    print_info "应用10G口PT刷流专用优化..."
     
 cat > "$CONFIG_FILE" <<EOF
 # ===== PT刷流优化配置 =====
-# 高并发 / 大吞吐 / 抢种优化
+# 10G网卡专用 / 高并发 / 大吞吐 / 抢种优化 / 不限带宽
 
 # ===== 文件句柄 =====
-fs.file-max = 1048576
+fs.file-max = 2097152
 
-# ===== 大缓冲区 =====
-net.core.rmem_max = 134217728
-net.core.wmem_max = 134217728
-net.ipv4.tcp_rmem = 4096 87380 134217728
-net.ipv4.tcp_wmem = 4096 65536 134217728
+# ===== 10G专用超大TCP缓冲区（跑满10G关键） =====
+net.core.rmem_max = 268435456
+net.core.wmem_max = 268435456
+net.ipv4.tcp_rmem = 4096 131072 268435456
+net.ipv4.tcp_wmem = 4096 131072 268435456
 
 # ===== 高并发 =====
-net.core.netdev_max_backlog = 65535
+net.core.netdev_max_backlog = 262144
 net.core.somaxconn = 65535
-net.ipv4.tcp_max_syn_backlog = 16384
+net.ipv4.tcp_max_syn_backlog = 65535
 
-# ===== 抢种强化 =====
+# ===== 抢种强化【已删除限速参数tcp_limit_output_bytes】 =====
 net.ipv4.tcp_notsent_lowat = 8192
-net.ipv4.tcp_limit_output_bytes = 4194304
 net.ipv4.tcp_slow_start_after_idle = 0
 
-# ===== TCP优化 =====
+# ===== TCP优化 + BBR 10G必开 =====
 net.ipv4.tcp_mtu_probing = 1
-net.ipv4.tcp_fastopen = 1
+net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_fin_timeout = 10
+net.ipv4.tcp_window_scaling = 1
+net.ipv4.tcp_congestion_control = bbr
+net.core.default_qdisc = fq
 
 # ===== conntrack =====
 net.netfilter.nf_conntrack_max = $CONNTRACK
 
-# ===== vm优化 =====
-vm.dirty_background_ratio = 5
-vm.dirty_ratio = 20
-vm.swappiness = 10
+# ===== vm优化（10G大吞吐写盘+2核低负载） =====
+vm.dirty_background_ratio = 3
+vm.dirty_ratio = 15
+vm.swappiness = 5
+vm.dirty_expire_centisecs = 300
+vm.dirty_writeback_centisecs = 100
 
 # ===== IPv6 =====
 net.ipv6.route.max_size = 2147483647
-net.ipv6.neigh.default.gc_thresh1 = 4096
-net.ipv6.neigh.default.gc_thresh2 = 8192
-net.ipv6.neigh.default.gc_thresh3 = 16384
+net.ipv6.neigh.default.gc_thresh1 = 8192
+net.ipv6.neigh.default.gc_thresh2 = 16384
+net.ipv6.neigh.default.gc_thresh3 = 32768
 net.ipv6.conf.all.accept_ra = 1
 net.ipv6.conf.default.accept_ra = 1
 net.ipv6.conf.all.use_tempaddr = 0
@@ -253,83 +257,87 @@ EOF
     
     apply_sysctl
     
-    print_ok "PT刷流优化完成"
+    print_ok "10G网卡 PT刷流优化完成（已移除带宽限制）"
     pause
 }
 
 
-# ===== VLESS优化 (稳定、低延迟) =====
+
+# ===== VLESS优化 (10G网卡·稳定、低延迟、无带宽上限) =====
 vless_opt(){
     clear
     print_title "VLESS节点优化"
     
     # 第二步：应用VLESS专用优化
-    print_info "应用VLESS节点专用优化..."
+    print_info "应用10G口 VLESS/Reality/Hysteria2 低延迟大带宽优化..."
     
 cat > "$CONFIG_FILE" <<EOF
 # ===== VLESS节点优化配置 =====
-# 目标：高并发 / 低延迟 / 稳定性
+# 10G网卡专用 / 高并发 / 低延迟 / 不限带宽 / 跨境稳定
 # 适用于：Xray / sing-box / Reality / Hysteria2
 
 # ===== 文件句柄 =====
-fs.file-max = 1048576
+fs.file-max = 2097152
 
-# ===== 高性能缓冲区 =====
-net.core.rmem_max = 67108864
-net.core.wmem_max = 67108864
-net.core.rmem_default = 262144
-net.core.wmem_default = 262144
+# ===== 10G专用超大TCP/UDP缓冲区（跑满10G关键） =====
+net.core.rmem_max = 268435456
+net.core.wmem_max = 268435456
+net.core.rmem_default = 524288
+net.core.wmem_default = 524288
 
-net.ipv4.tcp_rmem = 4096 262144 67108864
-net.ipv4.tcp_wmem = 4096 65536 67108864
+net.ipv4.tcp_rmem = 4096 262144 268435456
+net.ipv4.tcp_wmem = 4096 131072 268435456
 
-net.ipv4.udp_rmem_min = 16384
-net.ipv4.udp_wmem_min = 16384
+net.ipv4.udp_rmem_min = 65536
+net.ipv4.udp_wmem_min = 65536
 
-# ===== 高并发 =====
-net.core.netdev_max_backlog = 250000
+# ===== 高并发 10G网卡队列防丢包 =====
+net.core.netdev_max_backlog = 262144
 net.core.somaxconn = 65535
-net.ipv4.tcp_max_syn_backlog = 32768
+net.ipv4.tcp_max_syn_backlog = 65535
 net.ipv4.tcp_max_tw_buckets = 2000000
 
-# ===== TCP优化 =====
+# ===== TCP低延迟+10G必开BBR =====
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_slow_start_after_idle = 0
 net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_fin_timeout = 10
 net.ipv4.tcp_tw_reuse = 1
+net.ipv4.tcp_congestion_control = bbr
+net.core.default_qdisc = fq
 
 # ===== 延迟优化 =====
 net.ipv4.tcp_early_retrans = 3
 net.ipv4.tcp_recovery = 1
 
-# ===== conntrack =====
-net.netfilter.nf_conntrack_max = 1048576
+# ===== conntrack 高连接数 =====
+net.netfilter.nf_conntrack_max = 2097152
 
-# ===== vm优化 =====
-vm.swappiness = 10
-vm.dirty_background_ratio = 5
-vm.dirty_ratio = 20
+# ===== vm优化（2核+10G吞吐，防内存抖动） =====
+vm.swappiness = 5
+vm.dirty_background_ratio = 3
+vm.dirty_ratio = 15
+vm.dirty_expire_centisecs = 300
+vm.dirty_writeback_centisecs = 100
 
-# ===== IPv6优化 =====
-net.ipv6.route.max_size = 1048576
-net.ipv6.neigh.default.gc_thresh1 = 4096
-net.ipv6.neigh.default.gc_thresh2 = 8192
-net.ipv6.neigh.default.gc_thresh3 = 16384
+# ===== IPv6 10G带宽适配 =====
+net.ipv6.route.max_size = 2147483647
+net.ipv6.neigh.default.gc_thresh1 = 8192
+net.ipv6.neigh.default.gc_thresh2 = 16384
+net.ipv6.neigh.default.gc_thresh3 = 32768
 
 net.ipv6.conf.all.accept_ra = 1
 net.ipv6.conf.default.accept_ra = 1
-
 net.ipv6.conf.all.use_tempaddr = 0
-
 net.ipv6.tcp_mtu_probing = 1
 EOF
     
     apply_sysctl
     
-    print_ok "VLESS节点优化完成"
+    print_ok "10G网卡 VLESS节点优化完成（低延迟·无带宽限制）"
     pause
 }
+
 
 
 # ===== 查看当前优化状态 =====
