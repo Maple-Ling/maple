@@ -65,95 +65,6 @@ print_warn() { echo -e "${YELLOW}[!]${NC} $1"; }
 print_info() { echo -e "${CYAN}[i]${NC} $1"; }
 pause() { echo; echo -n "按回车键继续..."; read; }
 
-# ===== 检测当前TCP拥塞控制算法 =====
-detect_current_cc() {
-    CURRENT_CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "cubic")
-    CURRENT_QDISC=$(sysctl -n net.core.default_qdisc 2>/dev/null || echo "fq_codel")
-    echo -e "${CYAN}当前TCP算法: $CURRENT_CC${NC}"
-    echo -e "${CYAN}当前队列算法: $CURRENT_QDISC${NC}"
-    if [[ "$CURRENT_CC" == "bbr" || "$CURRENT_CC" == "bbr2" || "$CURRENT_CC" == "bbr3" || "$CURRENT_CC" == "bbrx" ]]; then
-        echo -e "${GREEN}✅ 已启用BBR系列算法${NC}"
-        return 0
-    else
-        echo -e "${YELLOW}⚠️ 未启用BBR系列算法${NC}"
-        return 1
-    fi
-}
-
-# ===== 检测系统调优脚本是否已运行 =====
-detect_tune_applied() {
-    # 检测标志文件是否存在
-    if [ -f "$TUNE_FLAG" ]; then
-        echo -e "${GREEN}✅ 系统调优脚本 (tune.sh -t) 已运行${NC}"
-        return 0
-    fi
-    
-    # 检查tune.sh是否设置了关键参数
-    if sysctl -n net.core.default_qdisc 2>/dev/null | grep -q "fq" && \
-       sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null | grep -q "bbr"; then
-        echo -e "${GREEN}✅ 系统调优已应用 (检测到BBR+fq)${NC}"
-        touch "$TUNE_FLAG"  # 创建标志文件
-        return 0
-    else
-        echo -e "${YELLOW}⚠️ 系统调优未运行${NC}"
-        return 1
-    fi
-}
-
-# ===== 运行系统调优脚本 (tune.sh -t) =====
-run_system_tune() {
-    print_info "正在运行系统调优脚本 (tune.sh -t)..."
-    
-    # 检查是否已运行
-    detect_tune_applied
-    if [ $? -eq 0 ]; then
-        print_ok "系统调优已应用，跳过"
-        return 0
-    fi
-    
-    # 下载并运行tune.sh -t
-    echo -e "${YELLOW}[!] 正在下载并运行系统调优脚本，这可能需要几分钟...${NC}"
-    
-    if bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -t; then
-        print_ok "系统调优脚本执行成功"
-        touch "$TUNE_FLAG"  # 创建标志文件
-        return 0
-    else
-        print_err "系统调优脚本执行失败"
-        return 1
-    fi
-}
-
-# ===== 系统优化辅助函数 =====
-set_cc(){
-    avail=$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null)
-    for i in bbrx bbr3 bbr2 bbrplus bbr
-    do
-        if echo $avail | grep -q $i; then
-            sysctl -w net.ipv4.tcp_congestion_control=$i >/dev/null 2>&1
-            print_ok "使用 TCP 算法: $i"
-            return
-        fi
-    done
-    
-    # 如果没有找到任何BBR算法，尝试安装内核
-    print_warn "未找到BBR系列算法，将尝试安装优化内核..."
-    auto_install_bbrx
-    
-    # 重新检测
-    avail=$(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null)
-    for i in bbrx bbr3 bbr2 bbr
-    do
-        if echo $avail | grep -q $i; then
-            sysctl -w net.ipv4.tcp_congestion_control=$i >/dev/null 2>&1
-            print_ok "使用 TCP 算法: $i"
-            return
-        fi
-    done
-    
-    print_err "无法启用BBR，使用系统默认算法"
-}
-
 apply_sysctl(){
     print_info "应用系统优化参数..."
     sysctl --system >/dev/null 2>&1
@@ -161,38 +72,6 @@ apply_sysctl(){
         print_ok "系统参数已应用"
     else
         print_err "应用系统参数失败"
-    fi
-}
-
-# ===== BBRx 安装函数 =====
-auto_install_bbrx() {
-    # 检查是否支持虚拟化环境
-    local virt_tech=$(systemd-detect-virt 2>/dev/null || echo "none")
-    if [[ "$virt_tech" == "lxc" || "$virt_tech" == "LXC" ]]; then
-        print_err "LXC容器不支持BBRx安装"
-        return 1
-    fi
-
-    # 检查操作系统类型
-    if [[ -f /etc/debian_version ]] || grep -qi "ubuntu" /etc/os-release; then
-        print_info "正在安装 BBRx (适用于Debian/Ubuntu)..."
-        echo -e "${YELLOW}[!] 正在下载并运行BBRx安装脚本，这可能需要几分钟...${NC}"
-        
-        if bash <(wget -qO- https://raw.githubusercontent.com/jerry048/Tune/main/tune.sh) -x; then
-            print_ok "BBRx 安装完成"
-            echo -e "${YELLOW}[!] 注意：需要重启系统才能生效，请执行: reboot${NC}"
-            return 0
-        else
-            print_err "BBRx 安装失败"
-            return 1
-        fi
-    elif [[ -f /etc/redhat-release ]] || [[ -f /etc/centos-release ]]; then
-        print_err "CentOS/RHEL系统暂不支持自动安装BBRx"
-        echo -e "${YELLOW}[!] 请手动安装较新内核后重试${NC}"
-        return 1
-    else
-        print_err "不支持的操作系统"
-        return 1
     fi
 }
 
@@ -337,70 +216,6 @@ EOF
     apply_sysctl
     
     print_ok "10G网卡 VLESS节点优化完成（低延迟·无带宽限制）"
-    pause
-}
-
-
-
-# ===== 查看当前优化状态 =====
-view_optimization() {
-    clear
-    print_title "当前优化状态"
-    
-    echo -e "${GREEN}=== 系统基本信息 ===${NC}"
-    echo "主机名: $(hostname)"
-    echo "操作系统: $(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"' || echo "未知")"
-    echo "内核版本: $(uname -r)"
-    echo "系统架构: $(uname -m)"
-    
-    # 检测当前TCP算法
-    detect_current_cc
-    
-    # 检测系统调优状态
-    detect_tune_applied
-    
-    # TCP拥塞控制算法
-    echo -e "\n${GREEN}=== TCP拥塞控制算法 ===${NC}"
-    CURRENT_CC=$(sysctl -n net.ipv4.tcp_congestion_control 2>/dev/null || echo "未知")
-    echo "当前算法: $CURRENT_CC"
-    echo "可用算法: $(sysctl -n net.ipv4.tcp_available_congestion_control 2>/dev/null || echo "未知")"
-    
-    # 队列算法
-    echo -e "\n${GREEN}=== 队列算法 ===${NC}"
-    CURRENT_QDISC=$(sysctl -n net.core.default_qdisc 2>/dev/null || echo "未知")
-    echo "当前队列: $CURRENT_QDISC"
-    
-    # IPv4网络核心参数
-    echo -e "\n${GREEN}=== IPv4网络核心参数 ===${NC}"
-    sysctl net.core.rmem_max net.core.wmem_max net.core.netdev_max_backlog net.core.somaxconn 2>/dev/null || echo "参数不可用"
-    
-    # IPv6优化状态
-    echo -e "\n${GREEN}=== IPv6优化状态 ===${NC}"
-    sysctl net.ipv6.conf.all.accept_ra net.ipv6.conf.all.accept_redirects 2>/dev/null || echo "IPv6未配置"
-    
-    # 文件描述符限制
-    echo -e "\n${GREEN}=== 文件描述符限制 ===${NC}"
-    ulimit -n
-    
-    # 系统负载
-    echo -e "\n${GREEN}=== 系统负载 ===${NC}"
-    uptime
-    
-    # 显示优化配置文件状态
-    echo -e "\n${GREEN}=== 优化配置文件状态 ===${NC}"
-    if [ -f "$CONFIG_FILE" ]; then
-        echo "配置文件: $CONFIG_FILE (存在)"
-        echo -e "${CYAN}最后修改时间: $(stat -c %y "$CONFIG_FILE" 2>/dev/null || echo "未知")${NC}"
-    else
-        echo "配置文件: $CONFIG_FILE (不存在)"
-    fi
-    
-    if [ -f "$TUNE_FLAG" ]; then
-        echo "系统调优标志: 已运行 (tune.sh -t)"
-    else
-        echo "系统调优标志: 未运行"
-    fi
-    
     pause
 }
 
@@ -761,6 +576,396 @@ qb_uninstall(){
     fi
     pause
 }
+
+# ===== Vertex安装 =====
+vertex_install() {
+    clear
+    print_title "Vertex 安装"
+    
+    # 1. 检测Docker环境
+    print_info "检测Docker环境..."
+    if command -v docker &> /dev/null; then
+        print_ok "Docker 已安装，版本: $(docker --version)"
+    else
+        print_warn "Docker 未安装，正在安装..."
+        
+        # 根据系统类型安装Docker
+        if [ -f /etc/debian_version ] || grep -qi "ubuntu" /etc/os-release; then
+            # Debian/Ubuntu
+            apt-get update
+            apt-get install -y ca-certificates curl gnupg
+            install -m 0755 -d /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+            chmod a+r /etc/apt/keyrings/docker.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+            apt-get update
+            apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        elif [ -f /etc/redhat-release ] || [ -f /etc/centos-release ]; then
+            # CentOS/RHEL
+            yum install -y yum-utils
+            yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+            yum install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+        else
+            print_err "不支持的操作系统，请手动安装Docker"
+            return 1
+        fi
+        
+        # 启动Docker服务
+        systemctl start docker
+        systemctl enable docker
+        print_ok "Docker 安装完成"
+    fi
+    
+    # 2. 询问端口设置
+    print_line
+    echo -e "${YELLOW}设置Vertex访问端口${NC}"
+    read -p "请输入Vertex Web界面端口 (默认: 3000): " VERTEX_PORT
+    VERTEX_PORT=${VERTEX_PORT:-3000}
+    
+    # 检查端口是否被占用
+    if netstat -tuln | grep -q ":$VERTEX_PORT "; then
+        print_warn "端口 $VERTEX_PORT 已被占用，请选择其他端口"
+        read -p "请输入新的端口号: " VERTEX_PORT
+    fi
+    
+    # 3. 安装unzip
+    print_info "检查unzip是否安装..."
+    if ! command -v unzip &> /dev/null; then
+        print_warn "unzip未安装，正在安装..."
+        if command -v apt-get &> /dev/null; then
+            apt-get update
+            apt-get install -y unzip
+        elif command -v yum &> /dev/null; then
+            yum install -y unzip
+        else
+            print_err "无法安装unzip，请手动安装"
+            return 1
+        fi
+        print_ok "unzip安装完成"
+    else
+        print_ok "unzip已安装"
+    fi
+    
+    # 4. 确保基础目录存在
+    VERTEX_DIR="/root/vertex"
+    if [ ! -d "$VERTEX_DIR" ]; then
+        print_info "创建Vertex目录: $VERTEX_DIR"
+        mkdir -p "$VERTEX_DIR"
+    fi
+    
+    # 5. 停止并删除已存在的容器
+    print_info "清理现有容器..."
+    docker stop vertex 2>/dev/null
+    docker rm vertex 2>/dev/null
+    
+    # 6. 运行Vertex容器（使用官方命令）
+    print_info "启动Vertex容器 (端口: $VERTEX_PORT)..."
+    docker run -d \
+      --name vertex \
+      -v "$VERTEX_DIR:/vertex" \
+      -p $VERTEX_PORT:3000 \
+      -e TZ=Asia/Shanghai \
+      --restart unless-stopped \
+      lswl/vertex:stable
+    
+    if [ $? -ne 0 ]; then
+        print_err "Vertex容器启动失败"
+        return 1
+    fi
+    
+    sleep 5
+    
+    # 7. 询问是否下载规则
+    print_line
+    echo -e "${YELLOW}是否下载并应用配置文件？${NC}"
+    echo "1. 是，从GitHub下载并解压配置文件"
+    echo "2. 否，只安装Vertex，不下载配置文件"
+    read -p "请选择 (1/2，默认1): " download_choice
+    
+    if [[ "$download_choice" != "2" ]]; then
+        print_info "下载配置文件..."
+        
+        # 使用raw.githubusercontent.com的直链
+        ZIP_URL="https://raw.githubusercontent.com/Maple-Ling/maple/refs/heads/main/vt%E5%A4%87%E4%BB%BD.zip"
+        TEMP_ZIP="/tmp/vt_backup.zip"
+        
+        echo -e "${CYAN}下载地址: $ZIP_URL${NC}"
+        
+        # 下载zip文件
+        if curl -L "$ZIP_URL" -o "$TEMP_ZIP"; then
+            print_ok "下载完成"
+            
+            # 检查zip文件是否有效
+            if file "$TEMP_ZIP" | grep -q "Zip archive"; then
+                # 确保data/rule目录存在
+                VERTEX_RULE_DIR="$VERTEX_DIR/data/rule"
+                if [ ! -d "$VERTEX_RULE_DIR" ]; then
+                    print_info "创建rule目录: $VERTEX_RULE_DIR"
+                    mkdir -p "$VERTEX_RULE_DIR"
+                fi
+                
+                # 解压到/root/vertex/data/rule/目录
+                print_info "解压文件到 $VERTEX_RULE_DIR/ ..."
+                
+                # 解压到指定目录，-o参数覆盖已存在文件
+                unzip -o "$TEMP_ZIP" -d "$VERTEX_RULE_DIR/"
+                
+                if [ $? -eq 0 ]; then
+                    print_ok "解压完成"
+                    
+                    # 显示解压的文件列表
+                    echo -e "${CYAN}解压到 $VERTEX_RULE_DIR/ 的文件:${NC}"
+                    ls -la "$VERTEX_RULE_DIR/"
+                    
+                else
+                    print_err "解压失败，zip文件可能损坏"
+                fi
+                
+                # 删除临时zip文件
+                rm -f "$TEMP_ZIP"
+            else
+                print_err "下载的文件不是有效的zip格式"
+                echo -e "${YELLOW}文件类型: $(file "$TEMP_ZIP")${NC}"
+                rm -f "$TEMP_ZIP"
+            fi
+        else
+            print_err "下载失败，请检查网络连接"
+        fi
+    else
+        print_info "跳过配置文件下载"
+    fi
+    
+    # 8. 询问是否自定义账号密码
+    print_line
+    echo -e "${YELLOW}是否自定义Vertex登录账号密码？${NC}"
+    echo "1. 是，设置自定义账号密码"
+    echo "2. 否，使用系统生成的随机密码"
+    read -p "请选择 (1/2，默认2): " custom_auth_choice
+    
+    if [[ "$custom_auth_choice" == "1" ]]; then
+        print_info "设置自定义账号密码..."
+        
+        # 确保data目录存在
+        VERTEX_DATA_DIR="$VERTEX_DIR/data"
+        if [ ! -d "$VERTEX_DATA_DIR" ]; then
+            mkdir -p "$VERTEX_DATA_DIR"
+        fi
+        
+        # 询问用户名
+        read -p "请输入管理员用户名 (默认: admin): " CUSTOM_USERNAME
+        CUSTOM_USERNAME=${CUSTOM_USERNAME:-admin}
+        
+        # 询问密码
+        read -sp "请输入管理员密码: " CUSTOM_PASSWORD
+        echo ""
+        
+        if [ -z "$CUSTOM_PASSWORD" ]; then
+            print_warn "密码不能为空，使用随机密码"
+            CUSTOM_PASSWORD=$(openssl rand -base64 12)
+            echo -e "${CYAN}生成的随机密码: $CUSTOM_PASSWORD${NC}"
+        fi
+        
+        # 生成MD5哈希（根据setting.json中的格式）
+        if command -v md5sum &> /dev/null; then
+            PASSWORD_MD5=$(echo -n "$CUSTOM_PASSWORD" | md5sum | awk '{print $1}')
+        elif command -v md5 &> /dev/null; then
+            PASSWORD_MD5=$(echo -n "$CUSTOM_PASSWORD" | md5)
+        else
+            # 使用openssl
+            PASSWORD_MD5=$(echo -n "$CUSTOM_PASSWORD" | openssl md5 | awk '{print $2}')
+        fi
+        
+        # 生成API Key（32位大写十六进制）
+        API_KEY=$(openssl rand -hex 16 | tr '[:lower:]' '[:upper:]')
+        
+        # 创建或修改setting.json
+        SETTING_JSON="$VERTEX_DATA_DIR/setting.json"
+        
+        # 如果文件已存在，备份
+        if [ -f "$SETTING_JSON" ]; then
+            cp "$SETTING_JSON" "$SETTING_JSON.backup"
+            print_info "已备份原有setting.json文件"
+        fi
+        
+        # 写入新的setting.json
+        cat > "$SETTING_JSON" << EOF
+{
+  "username": "$CUSTOM_USERNAME",
+  "password": "$PASSWORD_MD5",
+  "apiKey": "$API_KEY"
+}
+EOF
+        
+        if [ $? -eq 0 ]; then
+            print_ok "自定义账号密码设置成功"
+            echo -e "${CYAN}用户名: $CUSTOM_USERNAME${NC}"
+            echo -e "${CYAN}密码: $CUSTOM_PASSWORD${NC}"
+            echo -e "${CYAN}API Key: $API_KEY${NC}"
+            echo -e "${YELLOW}请妥善保存以上信息${NC}"
+        else
+            print_err "设置自定义账号密码失败"
+        fi
+    fi
+    
+    # 9. 重启容器使配置生效
+    print_info "重启Vertex容器..."
+    docker restart vertex
+    
+    sleep 3
+    
+    # 10. 显示状态和登录信息
+    print_line
+    print_ok "Vertex 安装完成！"
+    echo -e "${CYAN}容器状态:${NC}"
+    docker ps | grep vertex
+    
+    # 检查容器日志
+    print_info "检查容器启动状态..."
+    if docker logs --tail 5 vertex 2>/dev/null | grep -i "error\|fail"; then
+        print_warn "容器启动可能有错误，查看详细日志:"
+        docker logs --tail 20 vertex
+    else
+        print_ok "容器启动正常"
+    fi
+    
+    echo -e "\n${GREEN}访问地址: http://服务器IP:$VERTEX_PORT${NC}"
+    echo -e "${CYAN}数据目录: $VERTEX_DIR${NC}"
+    
+    # 根据是否自定义账号密码显示不同的登录信息
+    if [[ "$custom_auth_choice" == "1" ]]; then
+        echo -e "${CYAN}登录账号: $CUSTOM_USERNAME${NC}"
+        echo -e "${CYAN}登录密码: $CUSTOM_PASSWORD${NC}"
+        echo -e "${CYAN}API Key: $API_KEY${NC}"
+        echo -e "${YELLOW}提示: 这是您自定义的账号密码，请妥善保管${NC}"
+    else
+        # 获取初始密码（从容器或文件）
+        print_info "正在获取初始密码..."
+        
+        # 先尝试从宿主机文件获取
+        if [ -f "$VERTEX_DIR/data/password" ]; then
+            INITIAL_PASSWORD=$(cat "$VERTEX_DIR/data/password" 2>/dev/null | head -1)
+            echo -e "${CYAN}默认账号: admin${NC}"
+            echo -e "${CYAN}初始密码: $INITIAL_PASSWORD${NC}"
+            echo -e "${YELLOW}提示: 首次登录后请立即修改密码${NC}"
+        else
+            # 从容器的映射路径获取密码
+            INITIAL_PASSWORD=$(docker exec vertex cat /vertex/data/password 2>/dev/null || echo "未找到密码文件，请查看容器日志")
+            echo -e "${CYAN}默认账号: admin${NC}"
+            echo -e "${CYAN}初始密码: $INITIAL_PASSWORD${NC}"
+            echo -e "${YELLOW}提示: 如果密码不正确，请查看容器日志获取初始化密码${NC}"
+        fi
+    fi
+    
+    if [[ "$download_choice" != "2" ]]; then
+        echo -e "${CYAN}配置文件: 已从GitHub下载并解压到 $VERTEX_DIR/data/rule/${NC}"
+    else
+        echo -e "${CYAN}配置文件: 未下载，如需配置请手动添加${NC}"
+    fi
+    
+    echo -e "\n${YELLOW}如果遇到问题，可以查看日志: docker logs vertex${NC}"
+    
+    pause
+}
+
+# ===== 删除Vertex =====
+vertex_uninstall() {
+    clear
+    print_title "删除 Vertex"
+    
+    # 检查Vertex容器是否存在
+    if ! docker ps -a --format "{{.Names}}" | grep -q "^vertex$"; then
+        print_err "未找到名为 'vertex' 的Docker容器。"
+        pause
+        return
+    fi
+    
+    echo -e "${YELLOW}当前Vertex状态:${NC}"
+    docker ps -a | grep vertex
+    
+    VERTEX_DATA_DIR="/root/vertex"
+    echo -e "${CYAN}数据目录: $VERTEX_DATA_DIR${NC}"
+    
+    echo -e "\n${RED}警告：此操作将执行以下步骤：${NC}"
+    echo "1. 停止并删除Vertex容器"
+    echo "2. 删除数据目录: $VERTEX_DATA_DIR"
+    echo -n "是否继续？(y/N): "
+    read confirm
+    
+    if [[ ! $confirm =~ ^[Yy]$ ]]; then
+        echo "操作已取消。"
+        pause
+        return
+    fi
+    
+    # 步骤1: 停止并删除容器
+    print_info "停止并删除Vertex容器..."
+    docker stop vertex 2>/dev/null
+    docker rm vertex 2>/dev/null
+    
+    if [ $? -eq 0 ]; then
+        print_ok "Vertex容器已删除"
+    else
+        print_err "删除容器时出错"
+    fi
+    
+    # 步骤2: 删除数据目录
+    print_info "删除Vertex数据目录..."
+    if [ -d "$VERTEX_DATA_DIR" ]; then
+        rm -rf "$VERTEX_DATA_DIR"
+        print_ok "数据目录已删除: $VERTEX_DATA_DIR"
+    else
+        print_warn "数据目录不存在: $VERTEX_DATA_DIR"
+    fi
+    
+    # 步骤3: 询问是否卸载Docker
+    echo -e "\n${YELLOW}是否卸载Docker环境？${NC}"
+    echo "1. 是，卸载Docker及所有相关组件"
+    echo "2. 否，保留Docker环境"
+    read -p "请选择 (1/2，默认2): " docker_choice
+    
+    if [[ "$docker_choice" == "1" ]]; then
+        print_info "开始卸载Docker..."
+        
+        if command -v apt-get &> /dev/null; then
+            # Debian/Ubuntu
+            apt-get remove -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            apt-get autoremove -y
+            print_ok "Docker已卸载 (APT)"
+        elif command -v yum &> /dev/null; then
+            # CentOS/RHEL
+            yum remove -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            print_ok "Docker已卸载 (YUM)"
+        else
+            print_warn "无法自动卸载Docker，请手动操作"
+        fi
+    else
+        print_info "Docker环境已保留。"
+    fi
+    
+    print_ok "Vertex 删除完成！"
+    pause
+}
+
+# ===== Vertex 管理菜单 =====
+vertex_menu() {
+    while true; do
+        clear
+        print_simple_title
+        print_title "Vertex 管理"
+        echo "1. 安装 Vertex"
+        echo "2. 删除 Vertex (可选择是否卸载Docker)"
+        echo "0. 返回主菜单"
+        print_line
+        read -p "请选择 (0-2): " choice
+        case $choice in
+            1) vertex_install ;;
+            2) vertex_uninstall ;;
+            0) break ;;
+            *) print_err "无效选择，请重新输入"; sleep 1 ;;
+        esac
+    done
+}
+
 # ===== 脚本自动更新功能 =====
 update_script() {
     clear
@@ -1102,36 +1307,6 @@ run_sublinkx_install() {
     pause
 }
 
-# ===== 系统内核与调优菜单 =====
-system_tune_menu() {
-    while true; do
-        clear
-        print_simple_title
-        print_title "系统内核与调优"
-        echo "1. 运行系统调优 (tune.sh -t)"
-        echo "2. 检测并安装 BBRx 内核"
-        echo "3. 返回上级菜单"
-        print_line
-        read -p "请选择 (1-3): " choice
-        case $choice in
-            1) 
-                clear
-                print_title "运行系统调优"
-                run_system_tune
-                pause
-                ;;
-            2) 
-                clear
-                print_title "安装 BBRx 内核"
-                auto_install_bbrx
-                pause
-                ;;
-            3) break ;;
-            *) print_err "无效选择，请重新输入"; sleep 1 ;;
-        esac
-    done
-}
-
 script_directory_menu() {
     while true; do
         clear
@@ -1142,20 +1317,18 @@ script_directory_menu() {
         echo "3. 哨兵洗白ip养护"
         echo "4. 系统重装 (支持 Debian/Win/Alpine/Kali 等)"
         echo "5. 节点管理 (x-ui / sing-box / Hy2 / WARP)"
-        echo "6. 系统内核与调优"
-        echo "7. sublinkX 安装"
+        echo "6. sublinkX 安装"
         echo ""
         echo "0. 返回主菜单"
         print_line
-        read -p "请选择 (0-7): " choice
+        read -p "请选择 (0-6): " choice
         case $choice in
             1) run_yuju_toolbox ;;
             2) run_kejilion_toolbox ;;
             3) run_ipsentinel_toolbox ;;
             4) run_reinstall_interactive ;;
             5) node_management_menu ;;
-            6) system_tune_menu ;;
-            7) run_sublinkx_install ;;
+            6) run_sublinkx_install ;;
             0) break ;;
             *) print_err "无效选择，请重新输入"; sleep 1 ;;
         esac
@@ -1198,17 +1371,15 @@ node_management_menu() {
     done
 }
 
-
 # ===== 主菜单 =====
-# 统一使用首字母大写，确保调用一致
 Main_menu(){
     while true; do
         clear
         print_simple_title
         echo "1. PT刷流优化 (高并发/大吞吐)"
         echo "2. VLESS节点优化 (稳定/低延迟)"
-        echo "3. 查看当前优化状态"
-        echo "4. qBittorrent 管理"
+        echo "3. qBittorrent 管理"
+        echo "4. Vertex 管理"
         echo "5. 脚本目录"
         echo "6. 检查脚本更新"
         echo "0. 退出"
@@ -1217,8 +1388,8 @@ Main_menu(){
         case $choice in
             1) pt_opt ;;
             2) vless_opt ;;
-            3) view_optimization ;;
-            4) qb_menu ;;
+            3) qb_menu ;;
+            4) vertex_menu ;;
             5) script_directory_menu ;;
             6) update_script ;;
             0) clear; echo; echo "感谢使用！"; echo; exit 0 ;;
