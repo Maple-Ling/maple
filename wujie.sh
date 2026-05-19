@@ -866,7 +866,6 @@ EOF
     
     pause
 }
-
 # ===== 删除Vertex =====
 vertex_uninstall() {
     clear
@@ -886,8 +885,7 @@ vertex_uninstall() {
     echo -e "${CYAN}数据目录: $VERTEX_DATA_DIR${NC}"
     
     echo -e "\n${RED}警告：此操作将执行以下步骤：${NC}"
-    echo "1. 停止并删除Vertex容器"
-    echo "2. 删除数据目录: $VERTEX_DATA_DIR"
+    echo "停止并删除Vertex容器(这一步并非删除数据)"
     echo -n "是否继续？(y/N): "
     read confirm
     
@@ -908,13 +906,21 @@ vertex_uninstall() {
         print_err "删除容器时出错"
     fi
     
-    # 步骤2: 删除数据目录
-    print_info "删除Vertex数据目录..."
-    if [ -d "$VERTEX_DATA_DIR" ]; then
-        rm -rf "$VERTEX_DATA_DIR"
-        print_ok "数据目录已删除: $VERTEX_DATA_DIR"
+    # 步骤2: 询问是否删除数据目录
+    echo -e "\n${YELLOW}是否删除Vertex数据目录？${NC}"
+    echo -n "确认删除数据目录 $VERTEX_DATA_DIR 吗？(y/N，默认N不删除): "
+    read delete_data
+    
+    if [[ $delete_data =~ ^[Yy]$ ]]; then
+        print_info "删除Vertex数据目录..."
+        if [ -d "$VERTEX_DATA_DIR" ]; then
+            rm -rf "$VERTEX_DATA_DIR"
+            print_ok "数据目录已删除: $VERTEX_DATA_DIR"
+        else
+            print_warn "数据目录不存在: $VERTEX_DATA_DIR"
+        fi
     else
-        print_warn "数据目录不存在: $VERTEX_DATA_DIR"
+        print_info "已跳过删除数据目录，数据保留在: $VERTEX_DATA_DIR"
     fi
     
     # 步骤3: 询问是否卸载Docker
