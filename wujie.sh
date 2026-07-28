@@ -409,7 +409,7 @@ pt_opt() {
 
 cat > "$CONFIG_FILE" <<SYSEOF
 # ============================================================
-#  PT 刷流优化 - 高并发 / 大吞吐 / 抢连接 / 稳定性
+#  PT 刷流优化 - 高并发 / 大吞吐 / 抢连接 / 双栈
 #  核心: 连接数最大化 + 收发缓冲区拉满 + 抢种加速 + 内核调优
 # ============================================================
 fs.file-max = 2097152
@@ -425,9 +425,9 @@ net.ipv4.tcp_max_syn_backlog = 65535
 net.ipv4.tcp_max_tw_buckets = 2000000
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_slow_start_after_idle = 0
-net.ipv4.tcp_notsent_lowat = 4096
-net.ipv4.tcp_fin_timeout = 5
-net.ipv4.tcp_keepalive_time = 30
+net.ipv4.tcp_notsent_lowat = 131072
+net.ipv4.tcp_fin_timeout = 15
+net.ipv4.tcp_keepalive_time = 60
 net.ipv4.tcp_keepalive_intvl = 3
 net.ipv4.tcp_keepalive_probes = 2
 net.ipv4.tcp_congestion_control = bbr
@@ -435,17 +435,15 @@ net.core.default_qdisc = fq
 net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_challenge_ack_limit = 1000000
 net.ipv4.tcp_window_scaling = 1
-${CT_PARAM} = \${CONNTRACK}
+net.netfilter.nf_conntrack_max = 1048576
 
 vm.dirty_background_ratio = 3
 vm.dirty_ratio = 15
 vm.swappiness = 5
 vm.dirty_expire_centisecs = 300
 vm.dirty_writeback_centisecs = 100
-net.ipv6.route.max_size = 2147483647
-net.ipv6.neigh.default.gc_thresh1 = 8192
-net.ipv6.neigh.default.gc_thresh2 = 16384
-net.ipv6.neigh.default.gc_thresh3 = 32768
+
+# IPv6 双栈支持 — 无 V6 的机器自动忽略，有 V6 的优化
 net.ipv6.conf.all.accept_ra = 1
 net.ipv6.conf.default.accept_ra = 1
 net.ipv6.conf.all.use_tempaddr = 0
@@ -476,7 +474,7 @@ vless_opt() {
 
 cat > "$CONFIG_FILE" <<SYSEOF
 # ============================================================
-#  VLESS/Reality/Hysteria2 优化 - 低延迟 / 稳定性 / 低波动
+#  VLESS/Reality/Hysteria2 优化 - 低延迟 / 长连接 / 双栈
 #  适用: Xray | sing-box | Reality | Hysteria2
 #  核心: 延迟最小化 + UDP优化 + 带宽最大化 + 抖动控制
 # ============================================================
@@ -489,31 +487,28 @@ net.ipv4.tcp_rmem = 4096 262144 268435456
 net.ipv4.tcp_wmem = 4096 131072 268435456
 net.ipv4.udp_rmem_min = 65536
 net.ipv4.udp_wmem_min = 65536
-net.core.netdev_max_backlog = 262144
-net.core.somaxconn = 65535
-net.ipv4.tcp_max_syn_backlog = 65535
-net.ipv4.tcp_max_tw_buckets = 2000000
-net.ipv4.tcp_fastopen = 3
+net.core.netdev_max_backlog = 131072
+net.core.somaxconn = 16384
 net.ipv4.tcp_slow_start_after_idle = 0
 net.ipv4.tcp_mtu_probing = 1
-net.ipv4.tcp_fin_timeout = 5
+net.ipv4.tcp_fin_timeout = 30
+net.ipv4.tcp_keepalive_time = 300
+net.ipv4.tcp_keepalive_intvl = 15
+net.ipv4.tcp_keepalive_probes = 3
 net.ipv4.tcp_early_retrans = 3
 net.ipv4.tcp_recovery = 1
 net.ipv4.tcp_congestion_control = bbr
 net.core.default_qdisc = fq_codel
 net.ipv4.tcp_challenge_ack_limit = 1000000
 net.ipv4.tcp_window_scaling = 1
-${CT_PARAM} = \${CONNTRACK}
 
 vm.swappiness = 5
 vm.dirty_background_ratio = 3
 vm.dirty_ratio = 15
 vm.dirty_expire_centisecs = 300
 vm.dirty_writeback_centisecs = 100
-net.ipv6.route.max_size = 2147483647
-net.ipv6.neigh.default.gc_thresh1 = 8192
-net.ipv6.neigh.default.gc_thresh2 = 16384
-net.ipv6.neigh.default.gc_thresh3 = 32768
+
+# IPv6 双栈支持 — 无 V6 的机器自动忽略，有 V6 的优化
 net.ipv6.conf.all.accept_ra = 1
 net.ipv6.conf.default.accept_ra = 1
 net.ipv6.conf.all.use_tempaddr = 0
@@ -594,12 +589,17 @@ qb_optimize() {
     per_conn=$(( CPU * 50 + RAM_UNIT * 10 ))
     upload=$(( CPU * 30 + RAM_UNIT * 5 ))
     upload_t=$(( CPU * 10 + RAM_UNIT * 2 ))
-    cache=$(( RAM_UNIT * 16 ))
-    [ "$cache" -lt 16 ] && cache=16; [ "$cache" -gt 512 ] && cache=512
-    buf_base=$(( CPU * 1536 + RAM_UNIT * 384 ))
-    buf=$(( buf_base > 8192 ? 8192 : buf_base )); [ "$buf" -lt 512 ] && buf=512
-    buf_low_base=$(( CPU * 512 + RAM_UNIT * 128 ))
-    buf_low=$(( buf_low_base > 2048 ? 2048 : buf_low_base )); [ "$buf_low" -lt 256 ] && buf_low=256
+    cache=$(( RAM / 4 ))
+    [ "$cache" -lt 16 ] && cache=16; [ "$cache" -gt 1024 ] && cache=1024
+    buf=$(( CPU * 1536 + RAM_UNIT * 640 ))
+    [ "$buf" -lt 2048 ] && buf=2048
+    [ "$buf" -gt 32768 ] && buf=32768
+    # 4C4G及以上直接拉满
+    if [ "$CPU" -ge 4 ] && [ "$RAM" -ge 4096 ]; then buf=32768; fi
+    buf_low=$(( CPU * 768 + RAM_UNIT * 320 ))
+    [ "$buf_low" -lt 1024 ] && buf_low=1024
+    [ "$buf_low" -gt 8192 ] && buf_low=8192
+    if [ "$CPU" -ge 4 ] && [ "$RAM" -ge 4096 ]; then buf_low=8192; fi
     if   [ "$CPU" -le 1 ]; then aio=4
     elif [ "$CPU" -le 2 ]; then aio=8
     elif [ "$CPU" -le 3 ]; then aio=12
