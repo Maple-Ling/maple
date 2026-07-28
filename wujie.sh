@@ -298,7 +298,7 @@ ok()    { msg_box "$BG" " [OK] " "$1"; }
 err()   { msg_box "$BR" " [!!] " "$1"; }
 warn()  { msg_box "$BY" " [!!] " "$1"; }
 info()  { msg_box "$BC" " [>]  " "$1"; }
-step()  { msg_box "$DIM" "  |   " "$1"; }
+step()  { msg_box "$DIM" "     " "$1"; }
 
 print_title() { echo; msg_box "$BG" ">>>" "$1"; echo; }
 print_line()  { echo; panel "$DIM"; echo; }
@@ -1108,6 +1108,25 @@ vertex_menu() {
         mrow "2" "🗑️" "删除 Vertex"          "(可选卸载Docker)"  "$BR"
         mrow2 "0" "◀️" "返回主菜单"           "$W"
         panel "$C"
+        # 检测 Vertex 安装状态
+        local vertex_installed=false
+        if command -v vertex >/dev/null 2>&1 || [ -f /usr/local/bin/vertex ]; then
+            vertex_installed=true
+        fi
+        if ! $vertex_installed && command -v docker >/dev/null 2>&1; then
+            docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qi "vertex" && vertex_installed=true
+        fi
+        if $vertex_installed; then
+            local vertex_running=false
+            svc_is_active vertex 2>/dev/null && vertex_running=true
+            if ! $vertex_running && command -v docker >/dev/null 2>&1; then
+                docker ps --format '{{.Names}}' 2>/dev/null | grep -qi "vertex" && vertex_running=true
+            fi
+            $vertex_running && step "Vertex: 已安装 ✅ 运行中" || step "Vertex: 已安装 ⏹️ 未运行"
+        else
+            step "Vertex: 未安装 ❌"
+        fi
+        echo
         centered_read "请选择 (0-2)" "$BC" choice
         case "$choice" in
             1) vertex_install ;;
@@ -1191,7 +1210,7 @@ sys_status() {
     step "队列算法: ${qdisc}"
 
     echo
-    if [ -d /proc/net/nf_conntrack ]; then
+    if sysctl -n net.netfilter.nf_conntrack_max >/dev/null 2>&1; then
         local ct_used ct_max
         ct_used=$(cat /proc/sys/net/netfilter/nf_conntrack_count 2>/dev/null || echo "?")
         ct_max=$(cat /proc/sys/net/netfilter/nf_conntrack_max 2>/dev/null || echo "?")
@@ -1203,8 +1222,26 @@ sys_status() {
     echo
     info "运行中服务:"
     if [ "$INIT" = "systemd" ]; then
-        svc_is_active qbittorrent-nox && ok "qbittorrent-nox: 运行中" || step "qbittorrent-nox: 未运行"
-        svc_is_active vertex && ok "vertex: 运行中" || step "vertex: 未运行"
+        # 检测 qB — 先查 systemd 服务，再查进程，再查 Docker 容器
+        local qb_found=false
+        svc_is_active qbittorrent-nox && qb_found=true
+        if ! $qb_found && command -v docker >/dev/null 2>&1; then
+            docker ps --format '{{.Names}}' 2>/dev/null | grep -qi "qbittorrent\|qb" && qb_found=true
+        fi
+        if ! $qb_found; then
+            pgrep -f "qbittorrent-nox" >/dev/null 2>&1 && qb_found=true
+        fi
+        $qb_found && ok "qbittorrent-nox: 运行中" || step "qbittorrent-nox: 未运行"
+
+        # 检测 Vertex — 先查 systemd 服务，再查 Docker 容器
+        local vertex_found=false
+        svc_is_active vertex && vertex_found=true
+        if ! $vertex_found && command -v docker >/dev/null 2>&1; then
+            docker ps --format '{{.Names}}' 2>/dev/null | grep -qi "vertex" && vertex_found=true
+        fi
+        $vertex_found && ok "vertex: 运行中" || step "vertex: 未运行"
+
+        # 检测 Docker
         svc_is_active docker && ok "docker: 运行中" || step "docker: 未运行"
     fi
 
@@ -1229,6 +1266,23 @@ qb_menu(){
         mrow "7" "❌"  "卸载"                 "彻底删除"           "$BR"
         mrow2 "0" "◀️" "返回主菜单"            "$W"
         panel "$C"
+        # 检测 qB 安装状态
+        local qb_installed=false
+        [ -f "$QB_BIN" ] && qb_installed=true
+        if $qb_installed; then
+            local qb_running=false
+            svc_is_active qbittorrent-nox 2>/dev/null && qb_running=true
+            if ! $qb_running && command -v docker >/dev/null 2>&1; then
+                docker ps --format '{{.Names}}' 2>/dev/null | grep -qi "qbittorrent\|qb" && qb_running=true
+            fi
+            if ! $qb_running; then
+                pgrep -f "qbittorrent-nox" >/dev/null 2>&1 && qb_running=true
+            fi
+            $qb_running && step "qBittorrent: 已安装 ✅ 运行中" || step "qBittorrent: 已安装 ⏹️ 未运行"
+        else
+            step "qBittorrent: 未安装 ❌"
+        fi
+        echo
         centered_read "请选择 (0-7)" "$BC" choice
         case "$choice" in
             1) qb_install ;;
@@ -1491,4 +1545,3 @@ fi
 
 setup_shortcut >/dev/null 2>&1
 main_menu
-
