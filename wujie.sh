@@ -131,7 +131,7 @@ get_w() {
     local w
     w=$(tput cols 2>/dev/null)
     [ -z "$w" ] && w="${COLUMNS:-80}"
-    [ "$w" -lt 60 ] 2>/dev/null && w=60
+    [ "$w" -lt 40 ] 2>/dev/null && w=40
     echo "$w"
 }
 
@@ -149,7 +149,7 @@ panel() {
     local color="${1:-$C}"
     local w line_w pad line
     w=$(get_w)
-    line_w=$(( w * 8 / 10 ))
+    line_w=$(( w < 56 ? w - 2 : w * 8 / 10 ))
     pad=$(( (w - line_w) / 2 ))
     line=$(printf "%*s" "$line_w" "" | tr ' ' '-')
     printf "%${pad}s" ""
@@ -187,13 +187,15 @@ show_banner() {
         " ╚══╝╚══╝  ╚═════╝  ╚════╝ ╚═╝╚══════╝"
     )
     local line len pad
-    for line in "${logo[@]}"; do
-        len=${#line}
-        pad=$(( (w - len) / 2 ))
-        [ "$pad" -lt 0 ] && pad=0
-        printf "%${pad}s" ""
-        echo -e "${BM}${line}${K}"
-    done
+    if [ "$w" -ge 50 ]; then
+        for line in "${logo[@]}"; do
+            len=${#line}
+            pad=$(( (w - len) / 2 ))
+            [ "$pad" -lt 0 ] && pad=0
+            printf "%${pad}s" ""
+            echo -e "${BM}${line}${K}"
+        done
+    fi
     echo
     local title_str="无界刷流优化工具箱 v3.1  |  PT · VLESS · qB · Vertex"
     local t_len t_pad
@@ -214,7 +216,7 @@ show_submenu_banner() {
     local color="${2:-$BC}"
     local w box_w pad_left sp top_bar t_len t_pad t_sp1 t_sp2 s_len s_pad s_sp1 s_sp2 bot_bar
     w=$(get_w)
-    box_w=60
+    box_w=$(( w < 60 ? w - 4 : 60 ))
     pad_left=$(( (w - box_w) / 2 ))
     sp=$(printf "%${pad_left}s" "")
     echo
@@ -242,7 +244,7 @@ mrow() {
     local num_color="${5:-$W}" desc_color="${DIM}"
     local w container_w left_str left_len right_str right_len spaces_needed space_pad global_pad global_sp
     w=$(get_w)
-    container_w=56
+    container_w=$(( w < 56 ? w - 4 : 56 ))
     left_str="[ ${num} ] ${icon}  ${name}"
     left_len=$(get_vis_len "${left_str}")
     right_str="${desc}"
@@ -261,7 +263,7 @@ mrow2() {
     local num="$1" icon="$2" name="$3" num_color="${4:-$W}"
     local w container_w global_pad global_sp
     w=$(get_w)
-    container_w=56
+    container_w=$(( w < 56 ? w - 4 : 56 ))
     global_pad=$(( (w - container_w) / 2 ))
     [ "$global_pad" -lt 0 ] && global_pad=0
     global_sp=$(printf "%${global_pad}s" "")
