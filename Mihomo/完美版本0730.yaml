@@ -1,0 +1,321 @@
+port: 8080
+socks-port: 1080
+mixed-port: 7890
+redir-port: 7891
+tproxy-port: 7892
+external-ui-url: https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip
+external-controller: 0.0.0.0:9090
+external-ui-name: zashboard
+external-ui: ui
+secret: "188271"
+allow-lan: true
+bind-address: "*"
+ipv6: true
+mode: rule
+unified-delay: true
+tcp-concurrent: true
+log-level: error
+keep-alive-interval: 30
+keep-alive-idle: 120
+profile: { store-selected: true, store-fake-ip: true }
+hosts:
+  "fn.maple521.cc.cd": 192.168.1.200
+  "fnos.maple521.cc.cd": 192.168.1.200
+geox-url:
+  geoip: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.dat"
+  geosite: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geosite.dat"
+mmdb: "https://fastly.jsdelivr.net/gh/MetaCubeX/meta-rules-dat@release/geoip.metadb"
+tun:
+  enable: false
+  stack: mixed
+  dns-hijack: [udp://any:53, tcp://any:53]
+  auto-detect-interface: false
+  auto-route: false
+  auto-redirect: false
+  strict-route: false
+  endpoint-independent-nat: true
+sniffer:
+  enable: true
+  override-destination: true
+  parse-pure-ip: true
+  force-dns-mapping: true
+  sniff:
+    QUIC: { ports: [443] }
+    TLS:  { ports: [443, 8443] }
+    HTTP: { ports: [80, 8081-8880] }
+  force-domain:
+    - "+.netflix.com"
+    - "+.nflxvideo.net"
+    - "+.amazonaws.com"
+    - "+.media.dssott.com"
+    - "+.tiktok.com"
+    - "play.google.com"
+    - "dl.google.com"
+    - "clients.google.com"
+    - "android.com"
+    - "*.googlevideo.com"
+  skip-domain:
+    - Mijia Cloud
+    - dlg.io.mi.com
+    - "+.oray.com"
+    - "+.sunlogin.net"
+    - "+.push.apple.com"
+dns:
+  enable: true
+  ipv6: true
+  listen: 0.0.0.0:1053
+  enhanced-mode: fake-ip
+  fake-ip-range: 198.18.0.1/16
+  fake6-ip-range: fd00::8/56
+  fake-ip-filter-mode: blacklist
+  fake6-ip-filter-mode: blacklist
+  respect-rules: true
+  proxy-server-nameserver:
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+  nameserver:
+    - https://dns.alidns.com/dns-query
+    - https://doh.pub/dns-query
+  fake-ip-filter:
+    - "+.lan"
+    - "+.local"
+    - "+.home.arpa"
+    - "localhost"
+    - "*.challenges.cloudflare.com"
+    - "*.captcha.cloudflare.com"
+    - "*.hcaptcha.com"
+    - "*.recaptcha.net"
+    - "rule-set:cn_domain,private_domain,rule-direct_domain"
+  fake6-ip-filter:
+    - "+.lan"
+    - "+.local"
+    - "+.home.arpa"
+    - "localhost"
+    - "*.challenges.cloudflare.com"
+    - "*.captcha.cloudflare.com"
+    - "*.hcaptcha.com"
+    - "*.recaptcha.net"
+    - "rule-set:cn_domain,private_domain,rule-direct_domain"
+  nameserver-policy:
+    "+.google.com": https://dns.alidns.com/dns-query
+    "+.googleapis.com": https://dns.alidns.com/dns-query
+    "+.gstatic.com": https://dns.alidns.com/dns-query
+    "+.ggpht.com": https://dns.alidns.com/dns-query
+    "+.googlevideo.com": https://dns.alidns.com/dns-query
+    "+.googleusercontent.com": https://dns.alidns.com/dns-query
+    "+.android.com": https://dns.alidns.com/dns-query
+    "+.play.google.com": https://dns.alidns.com/dns-query
+    "+.youtube.com": https://dns.alidns.com/dns-query
+    "+.clients.google.com": https://dns.alidns.com/dns-query
+    "+.ipv6.google.com": https://dns.alidns.com/dns-query
+    "rule-set:google_domain": https://dns.alidns.com/dns-query
+    "rule-set:youtube_domain": https://dns.alidns.com/dns-query
+proxy-providers:
+  日本:
+    type: http
+    interval: 86400
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 3600
+      failover: [https://www.gstatic.com/generate_204]
+    proxy: ☀️ 直连
+    url: ""
+  美国:
+    type: http
+    interval: 86400
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 3600
+      failover: [https://www.gstatic.com/generate_204]
+    proxy: ☀️ 直连
+    url: ""
+  荷兰:
+    type: http
+    interval: 86400
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 3600
+      failover: [https://www.gstatic.com/generate_204]
+    proxy: ☀️ 直连
+    url: ""
+  vless:
+    type: http
+    interval: 86400
+    health-check:
+      enable: true
+      url: https://www.gstatic.com/generate_204
+      interval: 3600
+      failover: [https://www.gstatic.com/generate_204]
+    proxy: ☀️ 直连
+    url: ""
+proxies:
+  - name: "☀️ 直连"
+    type: direct
+    udp: true
+pr: &pr {type: select, proxies: [🌞 代理, 🇯🇵 日本, 🇺🇸 美国, 🇰🇷 韩国, 🇸🇬 新加坡, 🇭🇰 香港, 🇨🇳 台湾, 🇳🇱 荷兰, 🌈 优选, ✨ 反代, ☀️ 直连]}
+proxy-groups:
+  - {name: 🌞 代理, type: select, proxies: [🇯🇵 日本, 🇺🇸 美国, 🇰🇷 韩国, 🇸🇬 新加坡, 🇭🇰 香港, 🇨🇳 台湾, 🇳🇱 荷兰, 🌈 优选, ✨ 反代, ☀️ 直连]}
+  - {name: 🇯🇵 日本, type: select, include-all: true, filter: "(?i)日|jp", exclude-filter: "优选"}
+  - {name: 🇺🇸 美国, type: select, include-all: true, filter: "(?i)美|us", exclude-filter: "优选"}
+  - {name: 🇰🇷 韩国, type: select, include-all: true, filter: "(?i)韩|kr"}
+  - {name: 🇸🇬 新加坡, type: select, include-all: true, filter: "(?i)新|sg"}
+  - {name: 🇭🇰 香港, type: select, include-all: true, filter: "(?i)港|hk"}
+  - {name: 🇨🇳 台湾, type: select, include-all: true, filter: "(?i)台|tw"}
+  - {name: 🇳🇱 荷兰, type: select, include-all: true, filter: "(?i)荷|hl", exclude-filter: "优选"}
+  - {name: 🌈 优选, type: select, include-all: true, filter: "(?i)优选", exclude-filter: "反代"}
+  - {name: ✨ 反代, type: select, include-all: true, filter: "(?i)反代"}
+  - {name: 🌟 Google, !!merge <<: *pr}
+  - {name: 💫 ChatGPT, !!merge <<: *pr}
+  - {name: 💬 Telegram, !!merge <<: *pr}
+  - {name: 🎵 TikTok, !!merge <<: *pr}
+  - {name: 🎬 Emby, !!merge <<: *pr}
+  - {name: 🐳 容器, !!merge <<: *pr}
+  - {name: 🏆 Steam, !!merge <<: *pr}
+  - {name: 🎮 腾讯, !!merge <<: *pr}
+  - {name: ☀️ 兜底, !!merge <<: *pr}
+rules:
+  - RULE-SET, private_domain, ☀️ 直连
+  - RULE-SET, private_ip, ☀️ 直连, no-resolve
+  - RULE-SET, rule-direct_domain, ☀️ 直连
+  - RULE-SET, google_domain, 🌟 Google
+  - RULE-SET, google_ip, 🌟 Google, no-resolve
+  - RULE-SET, youtube_domain, 🌟 Google
+  - RULE-SET, cn_domain, ☀️ 直连
+  - RULE-SET, cn_ip, ☀️ 直连, no-resolve
+  - RULE-SET, rule-proxy_domain, 🌞 代理
+  - RULE-SET, rule-emby-proxy_domain, 🌈 优选
+  - RULE-SET, rule-emby_domain, 🎬 Emby
+  - RULE-SET, telegram_domain, 💬 Telegram
+  - RULE-SET, telegram_ip, 💬 Telegram, no-resolve
+  - RULE-SET, docker_domain, 🐳 容器
+  - RULE-SET, openai, 💫 ChatGPT
+  - RULE-SET, steam, 🏆 Steam
+  - RULE-SET, tiktok_domain, 🎵 TikTok
+  - RULE-SET, tencent, 🎮 腾讯
+  - RULE-SET, tencent-games, 🎮 腾讯
+  - RULE-SET, geolocation-!cn, 🌞 代理
+  - MATCH, ☀️ 兜底
+rule-providers:
+  rule-direct_domain:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: text
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/Maple-Ling/maple/refs/heads/main/Mihomo/rule-direct.list"
+  rule-proxy_domain:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: text
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/Maple-Ling/maple/refs/heads/main/Mihomo/rule-proxy.list"
+  rule-emby_domain:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: text
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/Maple-Ling/maple/refs/heads/main/Mihomo/rule-emby.list"
+  rule-emby-proxy_domain:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: text
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/Maple-Ling/maple/refs/heads/main/Mihomo/rule-emby-proxy.list"
+  openai:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/openai.mrs"
+  steam:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/steam.mrs"
+  tencent:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tencent.mrs"
+  tencent-games:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tencent-games.mrs"
+  private_domain:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"
+  geolocation-!cn:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"
+  google_domain:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/google.mrs"
+  telegram_domain:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"
+  tiktok_domain:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/tiktok.mrs"
+  cn_domain:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"
+  youtube_domain:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs"
+  docker_domain:
+    type: http
+    interval: 86400
+    behavior: domain
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/docker.mrs"
+  cn_ip:
+    type: http
+    interval: 86400
+    behavior: ipcidr
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"
+  private_ip:
+    type: http
+    interval: 86400
+    behavior: ipcidr
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/private.mrs"
+  google_ip:
+    type: http
+    interval: 86400
+    behavior: ipcidr
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/google.mrs"
+  telegram_ip:
+    type: http
+    interval: 86400
+    behavior: ipcidr
+    format: mrs
+    url: "https://gh-proxy.com/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/telegram.mrs"
