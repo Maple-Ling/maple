@@ -911,14 +911,26 @@ vertex_install() {
     else
         warn "Docker 未安装，正在安装..."
         if [ "$OS_TYPE" = "debian" ]; then
-            apt-get update
+            local DOCKER_DISTRO="debian"
+            local DOCKER_CODENAME
+            DOCKER_CODENAME=$(. /etc/os-release && echo "${VERSION_CODENAME:-bookworm}")
+            # Ubuntu 走 ubuntu 源，其余(Debian)走 debian 源
+            [ "${OS_NAME}" = "ubuntu" ] && DOCKER_DISTRO="ubuntu"
+            apt-get update || warn "apt-get update 有报错，继续尝试"
             apt-get install -y ca-certificates curl gnupg
             install -m 0755 -d /etc/apt/keyrings
-            curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+            rm -f /etc/apt/keyrings/docker.gpg
+            curl -fsSL "https://download.docker.com/linux/${DOCKER_DISTRO}/gpg" | gpg --dearmor -o /etc/apt/keyrings/docker.gpg || {
+                err "下载 Docker GPG 密钥失败"; wait_key; return 1
+            }
             chmod a+r /etc/apt/keyrings/docker.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "${VERSION_CODENAME}") stable" | tee /etc/apt/sources.list.d/docker.list >/dev/null
-            apt-get update
-            apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+            # 覆盖写入，避免残留错误的 ubuntu 源
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/${DOCKER_DISTRO} ${DOCKER_CODENAME} stable" > /etc/apt/sources.list.d/docker.list
+            ok "已写入 Docker 源: ${DOCKER_DISTRO} ${DOCKER_CODENAME}"
+            apt-get update || { err "Docker 源不可用，请检查 /etc/apt/sources.list.d/docker.list"; wait_key; return 1; }
+            apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || {
+                err "Docker 安装失败"; wait_key; return 1
+            }
         elif [ "$OS_TYPE" = "alpine" ]; then
             apk add --no-cache docker openrc
             rc-update add docker default
@@ -930,126 +942,190 @@ vertex_install() {
         ok "Docker 安装完成"
     fi
 
+    # ---- Vertex 官方以 Docker 镜像分发，无独立二进制 ----
+    if ! command -v docker >/dev/null 2>&1; then
+        err "Docker 未就绪，无法安装 Vertex"
+        wait_key; return 1
+    fi
+    if ! docker info >/dev/null 2>&1; then
+        warn "Docker 守护进程未运行，正在启动..."
+        svc_start docker
+        sleep 3
+        if ! docker info >/dev/null 2>&1; then
+            err "Docker 守护进程启动失败"; wait_key; return 1
+        fi
+    fi
+
     print_line
     info "设置Vertex访问端口"
     read -p "    请输入Vertex Web界面端口 (默认: 3000): " VERTEX_PORT
     VERTEX_PORT="${VERTEX_PORT:-3000}"
-
     if check_port "$VERTEX_PORT"; then
         warn "端口 $VERTEX_PORT 已被占用"
         read -p "    请输入新的端口号: " VERTEX_PORT
+        VERTEX_PORT="${VERTEX_PORT:-3000}"
     fi
 
-    info "检查unzip是否安装..."
-    if ! command -v unzip >/dev/null 2>&1; then
-        warn "unzip未安装，正在安装..."
-        case "$OS_TYPE" in
-            debian) apt-get install -y unzip ;;
-            alpine) apk add --no-cache unzip ;;
-            *)      warn "无法自动安装unzip";;
-        esac
-        ok "unzip 安装完成"
-    fi
-
-    info "检测架构..."
-    local VERTEX_FILE="vertex-linux-amd64.zip"
-    local VERTEX_BIN_NAME="vertex-linux-amd64"
-    case "$ARCH" in
-        amd64) VERTEX_FILE="vertex-linux-amd64.zip"; VERTEX_BIN_NAME="vertex-linux-amd64";;
-        arm64) VERTEX_FILE="vertex-linux-arm64.zip";  VERTEX_BIN_NAME="vertex-linux-arm64";;
-        *)     warn "Vertex 官方可能未提供 $ARCH 版本，尝试 amd64...";;
-    esac
-
-    info "下载 Vertex 安装包..."
-    local VERTEX_TMP="/tmp/vertex_install"
-    mkdir -p "$VERTEX_TMP"
-    cd "$VERTEX_TMP" || { err "无法进入临时目录"; return 1; }
-    wget -q -O vertex.zip "https://github.com/vortex-ai/vertex-ai/releases/latest/download/${VERTEX_FILE}" 2>/dev/null || \
-    wget -q -O vertex.zip "https://github.com/vortex-ai/vertex-ai/releases/download/v1.0.0/${VERTEX_FILE}"
-
-    if [ -f vertex.zip ]; then
-        unzip -o vertex.zip -d "$VERTEX_TMP" >/dev/null 2>&1
-        ok "Vertex 安装文件提取完成"
-    else
-        err "下载 Vertex 失败，请检查网络和架构: $ARCH"
-        wait_key; cd - >/dev/null; return 1
+    # 已存在同名容器则先移除（数据目录保留）
+    if docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "vertex"; then
+        warn "检测到已存在的 vertex 容器，正在移除旧容器（数据保留）..."
+        docker rm -f vertex >/dev/null 2>&1
     fi
 
     mkdir -p "$VERTEX_DATA_DIR"
+    chmod 777 "$VERTEX_DATA_DIR"
 
-    local VERTEX_TMP_BIN
-    VERTEX_TMP_BIN=$(find "$VERTEX_TMP" -maxdepth 1 -type f \( -name "vertex" -o -name "${VERTEX_BIN_NAME}" \) 2>/dev/null | head -1)
-    if [ -n "$VERTEX_TMP_BIN" ]; then
-        cp "$VERTEX_TMP_BIN" /usr/local/bin/vertex
-        chmod +x /usr/local/bin/vertex
-    else
-        err "未找到 Vertex 可执行文件"
-        wait_key; cd - >/dev/null; return 1
+    # ---- 自定义登录账号密码 ----
+    print_line
+    info "设置 Vertex 登录账号（直接回车使用默认值 admin / adminadmin）"
+    local VERTEX_USER VERTEX_PASS
+    read -p "    请输入用户名 (默认: admin): " VERTEX_USER
+    VERTEX_USER="${VERTEX_USER:-admin}"
+    read -p "    请输入密码 (默认: adminadmin): " VERTEX_PASS
+    VERTEX_PASS="${VERTEX_PASS:-adminadmin}"
+    ok "登录用户名: ${VERTEX_USER}"
+
+    info "拉取 Vertex 镜像 lswl/vertex:stable（约 250MiB，请耐心等待）..."
+    if ! docker pull lswl/vertex:stable; then
+        err "镜像拉取失败，请检查网络或 Docker 配置"
+        wait_key; return 1
     fi
 
-    case "$INIT" in
-        systemd)
-            cat > "$(svc_path vertex)" <<EOF
-[Unit]
-Description=Vertex AI Container Manager
-After=network.target docker.service
-Wants=docker.service
-[Service]
-Type=simple
-ExecStart=/usr/local/bin/vertex
-WorkingDirectory=$VERTEX_DATA_DIR
-Restart=on-failure
-RestartSec=5
-LimitNOFILE=65536
-Environment="GOOS=linux"
-Environment="GOARCH=${ARCH}"
-[Install]
-WantedBy=multi-user.target
-EOF
-            ;;
-        openrc)
-            cat > "$(svc_path vertex)" <<EOF
-#!/sbin/openrc-run
-name="vertex"
-command="/usr/local/bin/vertex"
-command_user="root"
-command_background=true
-pidfile="/var/run/vertex.pid"
-rc_need="docker"
-rc_start=20
-EOF
-            chmod +x "$(svc_path vertex)"
-            ;;
-    esac
+    info "创建并启动 Vertex 容器..."
+    docker run -d \
+        --name vertex \
+        --restart unless-stopped \
+        -p "${VERTEX_PORT}:3000" \
+        -v "${VERTEX_DATA_DIR}:/vertex" \
+        -e TZ=Asia/Shanghai \
+        lswl/vertex:stable || {
+        err "容器创建失败"
+        docker logs --tail 20 vertex 2>&1
+        wait_key; return 1
+    }
 
-    svc_reload
-    svc_enable vertex
-    svc_start vertex
-    sleep 3
+    info "等待服务就绪..."
+    local v_ok=false
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "vertex"; then
+            v_ok=true; break
+        fi
+        sleep 2
+    done
 
-    if svc_is_active vertex; then
-        ok "Vertex 服务已启动"
+    if $v_ok; then
+        ok "Vertex 容器已启动"
     else
-        err "Vertex 服务启动失败，请检查日志"
-        svc_journal vertex
-        wait_key; cd - >/dev/null; return 1
+        err "Vertex 容器未能正常运行，最近日志："
+        docker logs --tail 30 vertex 2>&1
+        wait_key; return 1
+    fi
+
+    # ---- 写入自定义账号密码（setting.json 存的是密码的 md5）----
+    local V_SETTING="${VERTEX_DATA_DIR}/data/setting.json"
+    local waited=0
+    while [ ! -f "$V_SETTING" ] && [ $waited -lt 30 ]; do
+        sleep 1; waited=$((waited + 1))
+    done
+
+    if [ -f "$V_SETTING" ]; then
+        local V_HASH
+        V_HASH=$(printf '%s' "$VERTEX_PASS" | md5sum | awk '{print $1}')
+        cp -f "$V_SETTING" "${V_SETTING}.bak" 2>/dev/null
+        printf '{\n  "username": "%s",\n  "password": "%s"\n}\n' "$VERTEX_USER" "$V_HASH" > "$V_SETTING"
+        chmod 600 "$V_SETTING"
+        info "应用账号密码，重启容器生效..."
+        docker restart vertex >/dev/null 2>&1
+        sleep 8
+        ok "账号密码已写入并生效"
+    else
+        warn "未找到 setting.json，保留官方默认账号（admin + 随机密码）"
+        VERTEX_USER="admin"
+        VERTEX_PASS=$(cat "${VERTEX_DATA_DIR}/data/password" 2>/dev/null)
     fi
 
     local ip_addr
-    ip_addr=$(curl -s ifconfig.me 2>/dev/null || curl -s ip.sb 2>/dev/null || echo "你的服务器IP")
+    ip_addr=$(curl -s4 --max-time 8 ifconfig.me 2>/dev/null || curl -s4 --max-time 8 ip.sb 2>/dev/null || echo "你的服务器IP")
     echo
     ok "Vertex 安装完成！"
     echo
     cntr "访问地址: http://${ip_addr}:${VERTEX_PORT}" "$BY"
-    cntr "管理面板: /usr/local/bin/vertex" "$BY"
-    cntr "服务状态: systemctl status vertex" "$BY"
+    cntr "登录用户名: ${VERTEX_USER}" "$BY"
+    cntr "登录密码: ${VERTEX_PASS}" "$BY"
+    cntr "修改账号: 面板左侧「全局设置 -> 安全设置」" "$BY"
+    cntr "容器状态: docker ps | grep vertex" "$BY"
+    cntr "查看日志: docker logs -f vertex" "$BY"
     wait_key
-    cd - >/dev/null
+}
+
+vertex_restart(){
+    clear
+    print_title "重启 Vertex"
+
+    if ! command -v docker >/dev/null 2>&1; then
+        err "未检测到 Docker，无法重启 Vertex"
+        wait_key; return 1
+    fi
+    if ! docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "vertex"; then
+        err "未找到 vertex 容器，请先安装"
+        wait_key; return 1
+    fi
+
+    local was_running=false
+    docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "vertex" && was_running=true
+    if $was_running; then
+        info "正在重启 vertex 容器..."
+    else
+        info "vertex 容器未运行，正在启动..."
+    fi
+
+    if ! docker restart vertex >/dev/null 2>&1; then
+        err "重启失败，最近日志："
+        docker logs --tail 20 vertex 2>&1
+        wait_key; return 1
+    fi
+
+    info "等待服务就绪..."
+    local ok_flag=false
+    for i in 1 2 3 4 5 6 7 8 9 10; do
+        if docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "vertex"; then
+            ok_flag=true; break
+        fi
+        sleep 2
+    done
+
+    if $ok_flag; then
+        ok "Vertex 已重启完成"
+        local port
+        port=$(docker port vertex 3000/tcp 2>/dev/null | head -1 | awk -F: '{print $NF}')
+        [ -n "$port" ] && cntr "访问地址: http://$(curl -s4 --max-time 8 ifconfig.me 2>/dev/null || echo "你的服务器IP"):${port}" "$BY"
+    else
+        err "容器未能正常运行，最近日志："
+        docker logs --tail 30 vertex 2>&1
+        wait_key; return 1
+    fi
+
+    wait_key
 }
 
 vertex_uninstall(){
     clear
     print_title "删除 Vertex"
+
+    # 先停掉容器
+    if command -v docker >/dev/null 2>&1 && docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "vertex"; then
+        info "停止并移除 vertex 容器..."
+        docker rm -f vertex >/dev/null 2>&1 && ok "容器已移除"
+    else
+        warn "未发现 vertex 容器"
+    fi
+    # 清理旧版脚本可能残留的二进制与 systemd 单元
+    if [ -f /usr/local/bin/vertex ] || [ -f "$(svc_path vertex)" ]; then
+        info "清理旧版残留文件..."
+        svc_stop vertex; svc_disable vertex
+        rm -f -- /usr/local/bin/vertex "$(svc_path vertex)"
+        svc_reload
+    fi
 
     info "是否删除Vertex数据目录？"
     read -p "    确认删除数据目录 $VERTEX_DATA_DIR 吗？(y/N): " delete_data
@@ -1092,11 +1168,6 @@ vertex_uninstall(){
         info "Docker环境已保留。"
     fi
 
-    svc_stop vertex
-    svc_disable vertex
-    rm -f -- /usr/local/bin/vertex "$(svc_path vertex)"
-    svc_reload
-
     ok "Vertex 删除完成！"
     wait_key
 }
@@ -1107,32 +1178,28 @@ vertex_menu() {
         clear
         show_submenu_banner "Vertex 管理" "$BM"
         mrow "1" "📦" "安装 Vertex"          ""  "$BC"
-        mrow "2" "🗑️" "删除 Vertex"          "(可选卸载Docker)"  "$BR"
+        mrow "2" "🔄" "重启 Vertex"          "导入备份后生效"  "$BY"
+        mrow "3" "🗑️" "删除 Vertex"          "(可选卸载Docker)"  "$BR"
         mrow2 "0" "◀️" "返回主菜单"           "$W"
         panel "$C"
-        # 检测 Vertex 安装状态
+        # 检测 Vertex 安装状态（Docker 容器方式）
         local vertex_installed=false
-        if command -v vertex >/dev/null 2>&1 || [ -f /usr/local/bin/vertex ]; then
-            vertex_installed=true
-        fi
-        if ! $vertex_installed && command -v docker >/dev/null 2>&1; then
-            docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qi "vertex" && vertex_installed=true
+        local vertex_running=false
+        if command -v docker >/dev/null 2>&1; then
+            docker ps -a --format '{{.Names}}' 2>/dev/null | grep -qx "vertex" && vertex_installed=true
+            docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "vertex" && vertex_running=true
         fi
         if $vertex_installed; then
-            local vertex_running=false
-            svc_is_active vertex 2>/dev/null && vertex_running=true
-            if ! $vertex_running && command -v docker >/dev/null 2>&1; then
-                docker ps --format '{{.Names}}' 2>/dev/null | grep -qi "vertex" && vertex_running=true
-            fi
             $vertex_running && step "Vertex: 已安装 ✅ 运行中" || step "Vertex: 已安装 ⏹️ 未运行"
         else
             step "Vertex: 未安装 ❌"
         fi
         echo
-        centered_read "请选择 (0-2)" "$BC" choice
+        centered_read "请选择 (0-3)" "$BC" choice
         case "$choice" in
             1) vertex_install ;;
-            2) vertex_uninstall ;;
+            2) vertex_restart ;;
+            3) vertex_uninstall ;;
             0) break ;;
             *) err "无效选择，请重新输入"; sleep 1 ;;
         esac
@@ -1164,10 +1231,12 @@ update_script() {
         rm -f -- "$temp_path"; sleep 2
     else
         warn "检测到新版本，正在自动更新并重启..."
+        cp -f "$local_path" "${local_path}.bak.$(date +%Y%m%d%H%M%S)" 2>/dev/null
         mv -f "$temp_path" "$local_path"
         chmod +x "$local_path"
+        warn "注意：远程版 vertex 安装逻辑可能已回退为旧版（ubuntu 源 + 假二进制），如安装失败请恢复备份"
         ok "更新成功！正在重新载入脚本..."
-        sleep 1
+        sleep 2
         exec "$local_path"
     fi
 }
@@ -1235,11 +1304,10 @@ sys_status() {
         fi
         $qb_found && ok "qbittorrent-nox: 运行中" || step "qbittorrent-nox: 未运行"
 
-        # 检测 Vertex — 先查 systemd 服务，再查 Docker 容器
+        # 检测 Vertex — Docker 容器方式
         local vertex_found=false
-        svc_is_active vertex && vertex_found=true
-        if ! $vertex_found && command -v docker >/dev/null 2>&1; then
-            docker ps --format '{{.Names}}' 2>/dev/null | grep -qi "vertex" && vertex_found=true
+        if command -v docker >/dev/null 2>&1; then
+            docker ps --format '{{.Names}}' 2>/dev/null | grep -qx "vertex" && vertex_found=true
         fi
         $vertex_found && ok "vertex: 运行中" || step "vertex: 未运行"
 
