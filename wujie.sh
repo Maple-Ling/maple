@@ -393,6 +393,44 @@ apply_sysctl(){
         fi
         ok "可应用的参数已生效"
     fi
+
+    # ---- conntrack buckets 跟随 max，避免哈希冲突 ----
+    if [ -w /proc/sys/net/netfilter/nf_conntrack_buckets ] && \
+       [ -r /proc/sys/net/netfilter/nf_conntrack_max ]; then
+        local ct_max ct_buckets want_buckets
+        ct_max=$(cat /proc/sys/net/netfilter/nf_conntrack_max 2>/dev/null || echo 0)
+        ct_buckets=$(cat /proc/sys/net/netfilter/nf_conntrack_buckets 2>/dev/null || echo 0)
+        want_buckets=$((ct_max / 4))
+        if [ "$ct_max" -gt 0 ] && [ "$ct_buckets" -lt "$want_buckets" ]; then
+            if echo "$want_buckets" > /proc/sys/net/netfilter/nf_conntrack_buckets 2>/dev/null; then
+                ok "conntrack buckets: ${ct_buckets} → ${want_buckets}（匹配 max=${ct_max}）"
+            else
+                warn "conntrack buckets 调整失败（需要 root 或内核不支持）"
+            fi
+        fi
+    fi
+
+    # ---- default_qdisc 只影响新建网卡，需对现有网卡显式生效 ----
+    local want_qdisc
+    want_qdisc=$(sysctl -n net.core.default_qdisc 2>/dev/null || echo "")
+    if [ -n "$want_qdisc" ] && command -v tc >/dev/null 2>&1; then
+        local iface applied=""
+        for iface in $(ip -o link show 2>/dev/null | awk -F': ' '{print $2}' | cut -d'@' -f1 | grep -vE '^lo$'); do
+            [ -e "/sys/class/net/${iface}" ] || continue
+            # 已在目标队列上则跳过
+            if tc qdisc show dev "$iface" 2>/dev/null | head -1 | grep -q "qdisc ${want_qdisc} "; then
+                continue
+            fi
+            if tc qdisc replace dev "$iface" root "$want_qdisc" 2>/dev/null; then
+                applied="${applied} ${iface}"
+            fi
+        done
+        if [ -n "$applied" ]; then
+            ok "队列算法 ${want_qdisc} 已应用到网卡:${applied}"
+        else
+            step "队列算法 ${want_qdisc} 已是当前状态，无需调整"
+        fi
+    fi
 }
 
 # ============================================================
@@ -424,7 +462,12 @@ net.ipv4.tcp_wmem = 4096 131072 268435456
 net.core.netdev_max_backlog = 262144
 net.core.somaxconn = 65535
 net.ipv4.tcp_max_syn_backlog = 65535
-net.ipv4.tcp_max_tw_buckets = 2000000
+# TIME_WAIT 桶上限: 按 4G 内存合理值，过大会吃内核内存
+net.ipv4.tcp_max_tw_buckets = 131072
+# TIME_WAIT 复用: 1=全局生效 (2 仅回环，对 PT 无效)
+net.ipv4.tcp_tw_reuse = 1
+# 出站端口范围扩大，避免高并发下端口耗尽
+net.ipv4.ip_local_port_range = 10240 65535
 net.ipv4.tcp_fastopen = 3
 net.ipv4.tcp_slow_start_after_idle = 0
 net.ipv4.tcp_notsent_lowat = 131072
@@ -438,6 +481,8 @@ net.ipv4.tcp_mtu_probing = 1
 net.ipv4.tcp_challenge_ack_limit = 1000000
 net.ipv4.tcp_window_scaling = 1
 net.netfilter.nf_conntrack_max = 1048576
+# conntrack 哈希桶，应与 max 成比例（apply_sysctl 会再校正一次）
+net.netfilter.nf_conntrack_buckets = 262144
 
 vm.dirty_background_ratio = 3
 vm.dirty_ratio = 15
@@ -449,7 +494,6 @@ vm.dirty_writeback_centisecs = 100
 net.ipv6.conf.all.accept_ra = 1
 net.ipv6.conf.default.accept_ra = 1
 net.ipv6.conf.all.use_tempaddr = 0
-net.ipv6.tcp_mtu_probing = 1
 SYSEOF
 
     apply_sysctl "$CONFIG_FILE"
@@ -487,22 +531,25 @@ net.core.rmem_default = 524288
 net.core.wmem_default = 524288
 net.ipv4.tcp_rmem = 4096 262144 268435456
 net.ipv4.tcp_wmem = 4096 131072 268435456
-net.ipv4.udp_rmem_min = 65536
-net.ipv4.udp_wmem_min = 65536
 net.core.netdev_max_backlog = 131072
 net.core.somaxconn = 16384
 net.ipv4.tcp_slow_start_after_idle = 0
 net.ipv4.tcp_mtu_probing = 1
-net.ipv4.tcp_fin_timeout = 30
-net.ipv4.tcp_keepalive_time = 300
-net.ipv4.tcp_keepalive_intvl = 15
+net.ipv4.tcp_fin_timeout = 15
+# 代理长连接保活：300s 太久，常见 NAT 超时 120s 会断连
+net.ipv4.tcp_keepalive_time = 60
+net.ipv4.tcp_keepalive_intvl = 10
 net.ipv4.tcp_keepalive_probes = 3
 net.ipv4.tcp_early_retrans = 3
 net.ipv4.tcp_recovery = 1
 net.ipv4.tcp_congestion_control = bbr
-net.core.default_qdisc = fq_codel
+# BBR 官方推荐配 fq，不是 fq_codel
+net.core.default_qdisc = fq
 net.ipv4.tcp_challenge_ack_limit = 1000000
 net.ipv4.tcp_window_scaling = 1
+# TIME_WAIT 复用，代理短连接多
+net.ipv4.tcp_tw_reuse = 1
+net.ipv4.ip_local_port_range = 10240 65535
 
 vm.swappiness = 5
 vm.dirty_background_ratio = 3
@@ -514,14 +561,13 @@ vm.dirty_writeback_centisecs = 100
 net.ipv6.conf.all.accept_ra = 1
 net.ipv6.conf.default.accept_ra = 1
 net.ipv6.conf.all.use_tempaddr = 0
-net.ipv6.tcp_mtu_probing = 1
 SYSEOF
 
     apply_sysctl "$CONFIG_FILE"
     echo
     ok "系统参数已写入 $CONFIG_FILE"
-    ok "UDP缓冲区: 已优化 | BBR拥塞控制: 已启用"
-    ok "低延迟: 已优化 | fq_codel队列: 已启用 | 抖动控制: 已优化"
+    ok "BBR拥塞控制: 已启用 | fq队列(pacing): 已启用"
+    ok "低延迟: 已优化 | 长连接保活: 60s | 抖动控制: 已优化"
     wait_key
 }
 
@@ -1242,6 +1288,338 @@ update_script() {
 }
 
 # ============================================================
+#  机器性能测试 - 磁盘 IO + 网络上下行 + qB 限速建议
+# ============================================================
+
+# 字节/秒 转可读文本
+fmt_bw() {
+    local bps="${1:-0}"
+    if [ "$bps" -ge 1000000000 ]; then
+        awk -v v="$bps" 'BEGIN{printf "%.2f GB/s", v/1000000000}'
+    elif [ "$bps" -ge 1000000 ]; then
+        awk -v v="$bps" 'BEGIN{printf "%.1f MB/s", v/1000000}'
+    elif [ "$bps" -ge 1000 ]; then
+        awk -v v="$bps" 'BEGIN{printf "%.1f KB/s", v/1000}'
+    else
+        echo "${bps} B/s"
+    fi
+}
+
+# 字节/秒 转 Mbps
+fmt_mbps() {
+    awk -v v="${1:-0}" 'BEGIN{printf "%.0f Mbps", v*8/1000000}'
+}
+
+# 找一块可写的测试目录
+bench_pick_dir() {
+    local d
+    for d in /pt /root /var/tmp /tmp; do
+        if [ -d "$d" ] && [ -w "$d" ]; then
+            echo "$d"; return 0
+        fi
+    done
+    echo "/tmp"
+}
+
+# 磁盘测速: 顺序读写 + 4K 随机
+bench_disk() {
+    local dir size_mb
+    dir=$(bench_pick_dir)
+    size_mb=256
+    # 空间不足时降级
+    local avail_mb
+    avail_mb=$(df -m "$dir" 2>/dev/null | awk 'NR==2{print $4}')
+    if [ -n "$avail_mb" ] && [ "$avail_mb" -lt 1024 ]; then
+        size_mb=64
+    fi
+
+    local tf="${dir}/.wj_bench_$$"
+    local seq_w=0 seq_r=0 rnd_w=0 rnd_r=0
+
+    info "磁盘顺序写测试 (${size_mb}MB)..." >&2
+    local out
+    out=$(dd if=/dev/zero of="$tf" bs=1M count="$size_mb" oflag=direct 2>&1 | tail -1)
+    seq_w=$(echo "$out" | grep -oE '[0-9.]+ [kKMG]?B/s' | tail -1)
+    seq_w=$(echo "$seq_w" | awk '{v=$1; u=$2; if(u ~ /^GB/) v*=1000; else if(u ~ /^KB/) v/=1000; printf "%.0f", v*1000000}')
+    [ -z "$seq_w" ] && seq_w=0
+
+    if [ -f "$tf" ]; then
+        info "磁盘顺序读测试..." >&2
+        out=$(dd if="$tf" of=/dev/null bs=1M iflag=direct 2>&1 | tail -1)
+        seq_r=$(echo "$out" | grep -oE '[0-9.]+ [kKMG]?B/s' | tail -1)
+        seq_r=$(echo "$seq_r" | awk '{v=$1; u=$2; if(u ~ /^GB/) v*=1000; else if(u ~ /^KB/) v/=1000; printf "%.0f", v*1000000}')
+        [ -z "$seq_r" ] && seq_r=0
+    fi
+    rm -f "$tf" 2>/dev/null
+
+    info "磁盘 4K 随机写测试 (这是 PT 做种的真实场景)..." >&2
+    out=$(dd if=/dev/zero of="$tf" bs=4k count=10000 oflag=direct 2>&1 | tail -1)
+    rnd_w=$(echo "$out" | grep -oE '[0-9.]+ [kKMG]?B/s' | tail -1)
+    rnd_w=$(echo "$rnd_w" | awk '{v=$1; u=$2; if(u ~ /^GB/) v*=1000; else if(u ~ /^KB/) v/=1000; printf "%.0f", v*1000000}')
+    [ -z "$rnd_w" ] && rnd_w=0
+
+    if [ -f "$tf" ]; then
+        info "磁盘 4K 随机读测试..." >&2
+        out=$(dd if="$tf" of=/dev/null bs=4k iflag=direct 2>&1 | tail -1)
+        rnd_r=$(echo "$out" | grep -oE '[0-9.]+ [kKMG]?B/s' | tail -1)
+        rnd_r=$(echo "$rnd_r" | awk '{v=$1; u=$2; if(u ~ /^GB/) v*=1000; else if(u ~ /^KB/) v/=1000; printf "%.0f", v*1000000}')
+        [ -z "$rnd_r" ] && rnd_r=0
+    fi
+    rm -f "$tf" 2>/dev/null
+
+    # ============ 并发测试: PT 真实场景 ============
+    # PT 刷流时下载写入与上传做种读取是同时进行的，
+    # 磁盘总带宽固定，单跑数据会高估承载能力
+    local par_w=0 par_r=0
+    local tf_r="${dir}/.wj_bench_r_$$" tf_w="${dir}/.wj_bench_w_$$"
+
+    info "并发读写测试 (模拟 PT 下载写入 + 上传做种读取)..." >&2
+    dd if=/dev/zero of="$tf_r" bs=4k count=20000 oflag=direct 2>/dev/null
+
+    # 写入用 1MB 块（PT 种子分块大小，非 4K），读取用 4K 随机（做种读块）
+    local pw="${dir}/.wj_pw_$$" pr="${dir}/.wj_pr_$$"
+    ( dd if=/dev/zero of="$tf_w" bs=1M count=256 oflag=direct 2>&1 | tail -1 > "$pw" ) &
+    ( dd if="$tf_r" of=/dev/null bs=4k iflag=direct 2>&1 | tail -1 > "$pr" ) &
+    wait
+
+    par_w=$(grep -oE '[0-9.]+ [kKMG]?B/s' "$pw" 2>/dev/null | tail -1)
+    par_w=$(echo "$par_w" | awk '{v=$1; u=$2; if(u ~ /^GB/) v*=1000; else if(u ~ /^KB/) v/=1000; printf "%.0f", v*1000000}')
+    [ -z "$par_w" ] && par_w=0
+
+    par_r=$(grep -oE '[0-9.]+ [kKMG]?B/s' "$pr" 2>/dev/null | tail -1)
+    par_r=$(echo "$par_r" | awk '{v=$1; u=$2; if(u ~ /^GB/) v*=1000; else if(u ~ /^KB/) v/=1000; printf "%.0f", v*1000000}')
+    [ -z "$par_r" ] && par_r=0
+
+    rm -f "$tf_r" "$tf_w" "$pw" "$pr" 2>/dev/null
+
+    # 回传: 顺序写 顺序读 随机写 随机读 并发写 并发读
+    echo "${seq_w}|${seq_r}|${rnd_w}|${rnd_r}|${par_w}|${par_r}"
+}
+
+# 网络测速: 只测 2 轮，取最大值避免 DNS/节点抖动误判
+bench_net() {
+    local dl=0 ul=0 tmpf="/tmp/.wj_up_$$"
+    local url="https://speed.cloudflare.com/__down?bytes=50000000"
+
+    info "下载测速 (最多 2 次)..." >&2
+    local i v best=0
+    for i in 1 2; do
+        v=$(curl -4 -o /dev/null -s -w '%{speed_download}' --max-time 30 "$url" 2>/dev/null)
+        v=${v%%.*}; [ -z "$v" ] && v=0
+        [ "$v" -gt "$best" ] && best=$v
+    done
+    dl=$best
+
+    info "上传测速 (最多 2 次)..." >&2
+    dd if=/dev/zero of="$tmpf" bs=1M count=50 2>/dev/null
+    best=0
+    for i in 1 2; do
+        v=$(curl -4 -o /dev/null -s -w '%{speed_upload}' --max-time 40 -X POST --data-binary @"$tmpf" "https://speed.cloudflare.com/__up" 2>/dev/null)
+        v=${v%%.*}; [ -z "$v" ] && v=0
+        [ "$v" -gt "$best" ] && best=$v
+    done
+    ul=$best
+    rm -f "$tmpf" 2>/dev/null
+
+    echo "${dl}|${ul}"
+}
+
+# 延迟测试
+bench_latency() {
+    local h best=""
+    for h in 1.1.1.1 8.8.8.8; do
+        local r
+        r=$(ping -c 2 -W 2 "$h" 2>/dev/null | tail -1 | awk -F'/' '{print $5}')
+        if [ -n "$r" ]; then
+            best=$r; break
+        fi
+    done
+    echo "${best:-0}"
+}
+
+# 主测试入口
+speed_test() {
+    clear
+    show_submenu_banner "机器性能测试" "$BY"
+    step "测磁盘真实 IO 与网络上下行，并给出 qB 限速建议"
+    echo
+
+    if [ "$EUID" -ne 0 ]; then
+        err "需要 root 权限才能准确测磁盘 IO"
+        wait_key; return 1
+    fi
+
+    local disk_res net_res lat
+    disk_res=$(bench_disk)
+    local seq_w seq_r rnd_w rnd_r par_w par_r
+    IFS='|' read -r seq_w seq_r rnd_w rnd_r par_w par_r <<< "$disk_res"
+
+    net_res=$(bench_net)
+    local dl ul
+    IFS='|' read -r dl ul <<< "$net_res"
+
+    lat=$(bench_latency)
+
+    # ================= 结果展示 =================
+    echo
+    print_line
+    print_title "测试结果"
+
+    cntr "【 磁盘 IO - 单项测试 】" "$BC"
+    step "顺序写入:   $(fmt_bw "$seq_w")   ($(fmt_mbps "$seq_w"))"
+    step "顺序读取:   $(fmt_bw "$seq_r")   ($(fmt_mbps "$seq_r"))"
+    step "4K 随机写:  $(fmt_bw "$rnd_w")   ($(fmt_mbps "$rnd_w"))"
+    step "4K 随机读:  $(fmt_bw "$rnd_r")   ($(fmt_mbps "$rnd_r"))"
+    echo
+
+    cntr "【 磁盘 IO - 并发测试 】PT 真实场景" "$BM"
+    step "4K 随机读(做种上传): $(fmt_bw "$par_r")   ($(fmt_mbps "$par_r"))"
+    step "1M 顺序写(下载写入): $(fmt_bw "$par_w")   ($(fmt_mbps "$par_w"))"
+    if [ "$rnd_r" -gt 0 ] && [ "$par_r" -gt 0 ]; then
+        local decay=$(( (rnd_r - par_r) * 100 / rnd_r ))
+        [ "$decay" -gt 0 ] && step "并发衰减: 随机读下降 ${decay}%（读写互抢带宽）"
+    fi
+    echo
+
+    cntr "【 网络 】" "$BC"
+    step "下载:       $(fmt_bw "$dl")   ($(fmt_mbps "$dl"))"
+    step "上传:       $(fmt_bw "$ul")   ($(fmt_mbps "$ul"))"
+    step "延迟:       ${lat} ms"
+    echo
+
+    # ================= 限速建议 =================
+    # PT 刷流是下载+上传同时进行的，必须用并发测试数据：
+    #   上传做种 -> 吃 并发4K随机读 (par_r)
+    #   下载新种 -> 吃 并发4K随机写 (par_w)
+    # 两者已在同一时刻测得，不会重复计算磁盘带宽
+    # 若并发数据缺失，回退到单项值
+    [ "$par_r" -le 0 ] && par_r=$rnd_r
+    [ "$par_w" -le 0 ] && par_w=$rnd_w
+
+    local up_limit down_limit
+
+    # 上传限速：并发随机读 与 网络上传 取较小
+    local disk_up_cap=$(( par_r * 70 / 100 ))
+    local net_up_cap=$(( ul * 85 / 100 ))
+    up_limit=$disk_up_cap
+    [ "$net_up_cap" -lt "$up_limit" ] && up_limit=$net_up_cap
+    [ "$up_limit" -le 0 ] && up_limit=$(( 10 * 1000000 ))
+
+    # 下载限速：PT 下载是 1MB 块顺序写，吃并发顺序写能力
+    local disk_down_cap=$(( par_w * 60 / 100 ))
+    local net_down_cap=$(( dl * 85 / 100 ))
+    down_limit=$disk_down_cap
+    [ "$net_down_cap" -lt "$down_limit" ] && down_limit=$net_down_cap
+    [ "$down_limit" -le 0 ] && down_limit=$(( 20 * 1000000 ))
+
+    local up_mb down_mb mid_up_mb mid_down_mb
+    local ag_up_mb ag_down_mb
+
+    # 保守 = 安全值 60%，给突发留余量
+    up_mb=$(( up_limit * 60 / 100 / 1000000 ))
+    down_mb=$(( down_limit * 60 / 100 / 1000000 ))
+    [ "$up_mb" -lt 5 ] && up_mb=5
+    [ "$down_mb" -lt 5 ] && down_mb=5
+
+    # 中等 = 安全值 85%
+    mid_up_mb=$(( up_limit * 85 / 100 / 1000000 ))
+    mid_down_mb=$(( down_limit * 85 / 100 / 1000000 ))
+    [ "$mid_up_mb" -lt 8 ] && mid_up_mb=8
+    [ "$mid_down_mb" -lt 8 ] && mid_down_mb=8
+
+    # 激进 = 贴并发实测极限 95%
+    ag_up_mb=$(( par_r * 95 / 100 / 1000000 ))
+    ag_down_mb=$(( par_w * 90 / 100 / 1000000 ))
+    local ag_up_net=$(( ul * 95 / 100 / 1000000 ))
+    local ag_down_net=$(( dl * 95 / 100 / 1000000 ))
+    [ "$ag_up_net" -lt "$ag_up_mb" ] && ag_up_mb=$ag_up_net
+    [ "$ag_down_net" -lt "$ag_down_mb" ] && ag_down_mb=$ag_down_net
+    [ "$ag_up_mb" -lt 10 ] && ag_up_mb=10
+    [ "$ag_down_mb" -lt 10 ] && ag_down_mb=10
+
+    print_line
+    print_title "qBittorrent 限速建议"
+
+    cntr "【 保守 】 稳如老狗，不卡 IO" "$BG"
+    step "上传 $(fmt_bw $((up_mb*1000000)))  |  下载 $(fmt_bw $((down_mb*1000000)))"
+    echo
+    cntr "【 中等 】 日常推荐" "$BC"
+    step "上传 $(fmt_bw $((mid_up_mb*1000000)))  |  下载 $(fmt_bw $((mid_down_mb*1000000)))"
+    echo
+    cntr "【 激进 】 贴磁盘极限，可能 IO 排队" "$BY"
+    step "上传 $(fmt_bw $((ag_up_mb*1000000)))  |  下载 $(fmt_bw $((ag_down_mb*1000000)))"
+    echo
+
+    # ================= 诊断 =================
+    print_line
+    cntr "【 瓶颈诊断 】" "$BM"
+
+    # 并发读写合计带宽（磁盘总带宽上限）
+    local par_total=$(( par_r + par_w ))
+    step "并发读写合计: $(fmt_bw "$par_total")"
+
+    if [ "$rnd_r" -gt 0 ] && [ "$seq_w" -gt 0 ]; then
+        local ratio=$(( rnd_r * 100 / seq_w ))
+        if [ "$ratio" -lt 10 ]; then
+            step "磁盘 IO 极差（4K随机读仅为顺序写的 ${ratio}%），这是主要瓶颈"
+        elif [ "$ratio" -lt 30 ]; then
+            step "磁盘 IO 偏弱（4K随机读为顺序写的 ${ratio}%），建议保守限速"
+        else
+            step "磁盘 IO 尚可（4K随机读为顺序写的 ${ratio}%）"
+        fi
+    fi
+
+    # 并发衰减：读写互相抢带宽的程度
+    if [ "$rnd_r" -gt 0 ] && [ "$par_r" -gt 0 ]; then
+        local decay=$(( (rnd_r - par_r) * 100 / rnd_r ))
+        if [ "$decay" -ge 30 ]; then
+            step "并发衰减严重（随机读下降 ${decay}%），读写互相抢带宽，必须降速"
+        elif [ "$decay" -ge 10 ]; then
+            step "并发衰减明显（随机读下降 ${decay}%），建议保守档"
+        else
+            step "并发衰减较小（随机读下降 ${decay}%），读写互扰不严重"
+        fi
+    fi
+
+    # 磁盘 vs 网络 对比：哪个是真瓶颈
+    if [ "$par_r" -gt 0 ] && [ "$ul" -gt 0 ]; then
+        if [ "$par_r" -lt "$ul" ]; then
+            step "磁盘随机读($(fmt_bw "$par_r")) < 网络上传($(fmt_bw "$ul"))，磁盘是上传瓶颈"
+        else
+            step "网络上传($(fmt_bw "$ul")) < 磁盘随机读($(fmt_bw "$par_r"))，网络是上传瓶颈"
+        fi
+    fi
+    if [ "$par_w" -gt 0 ] && [ "$dl" -gt 0 ]; then
+        if [ "$par_w" -lt "$dl" ]; then
+            step "磁盘顺序写($(fmt_bw "$par_w")) < 网络下载($(fmt_bw "$dl"))，磁盘是下载瓶颈"
+        else
+            step "网络下载($(fmt_bw "$dl")) < 磁盘顺序写($(fmt_bw "$par_w"))，网络是下载瓶颈"
+        fi
+    fi
+
+    if [ "$ul" -gt 0 ] && [ "$dl" -gt 0 ]; then
+        local nr=$(( ul * 100 / dl ))
+        if [ "$nr" -lt 30 ]; then
+            step "上传/下载 不对称（上传仅为下载的 ${nr}%），做种上传是弱项"
+        fi
+    fi
+
+    if [ "$par_r" -lt 50000000 ]; then
+        step "并发随机读低于 50MB/s，做种数量多时必然 IO 排队"
+    fi
+    if [ "$dl" -lt 100000000 ]; then
+        step "下载低于 100MB/s，未跑满千兆，检查线路/DNS"
+    fi
+
+    echo
+    info "设置方法: qBittorrent → 设置 → 连接 → 全局速率限制"
+    info "PT 下载上传同时进行，以上数值已考虑并发互抢"
+    info "建议先跑「保守」观察 IO 等待，稳定后再升「中等」"
+
+    wait_key
+}
+
+# ============================================================
 #  系统信息
 # ============================================================
 sys_status() {
@@ -1588,10 +1966,11 @@ main_menu() {
         mrow "4" "🐳" "Vertex 管理"            "安装 · 卸载"         "$BM"
         mrow "5" "📁" "脚本目录"                "工具箱 · 重装 · 节点" "$BG"
         mrow "6" "📊" "系统状态"               "实时信息"            "$BY"
-        mrow "7" "🔄" "脚本自动更新"           "远程更新"            "$BY"
+        mrow "7" "⚡" "机器性能测试"           "磁盘IO · 限速建议"    "$BY"
+        mrow "8" "🔄" "脚本自动更新"           "远程更新"            "$BY"
         mrow2 "0" "🚪" "退出"                  "$W"
         panel "$C"
-        centered_read "请选择 (0-7)" "$BC" choice
+        centered_read "请选择 (0-8)" "$BC" choice
         case "$choice" in
             1) pt_opt ;;
             2) vless_opt ;;
@@ -1599,7 +1978,8 @@ main_menu() {
             4) vertex_menu ;;
             5) script_directory_menu ;;
             6) sys_status ;;
-            7) update_script ;;
+            7) speed_test ;;
+            8) update_script ;;
             0) cntr "感谢使用 无界刷流优化工具箱 v3.1  ——— 🌊 WU JIE 🌊"; exit 0 ;;
             *) err "无效选择，请重新输入"; sleep 1 ;;
         esac
