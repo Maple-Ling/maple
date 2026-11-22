@@ -51,6 +51,7 @@ const DEFAULT_SETTINGS = {
   autoTranslate: false,
   autoTranslateSites: [],
   excludeSelectors: [],
+  disabledSites: [],               // 不翻译的网站（域名），命中则不整页翻译
   selectionTranslate: true,
   paragraphMode: false,            // 段落模式：点一下段落就翻，再点还原
   translateAttributes: true,       // 图片 alt / title 等属性文本也翻（悬停显示译文）
@@ -127,6 +128,48 @@ function getValue(key, fallback) {
     const raw = localStorage.getItem(key);
     return raw === null ? fallback : JSON.parse(raw);
   } catch (_) { return fallback; }
+}
+
+/* ---------------- 站点禁用（不翻译指定网站） ---------------- */
+
+/** 当前域名（小写，不含端口）；拿不到返回空串 */
+function currentHost() {
+  try {
+    const h = (typeof location !== 'undefined' && location.hostname) || '';
+    return String(h).toLowerCase();
+  } catch (_) { return ''; }
+}
+
+/**
+ * 归一化用户输入的站点：去掉协议 / 路径 / 端口 / 前导点 / www.
+ * 这样「https://www.example.com/a/b?x=1」和「example.com」会被当成同一个站。
+ */
+function normalizeSite(input) {
+  let s = String(input || '').trim().toLowerCase();
+  if (!s) return '';
+  s = s.replace(/^[a-z][a-z0-9+.-]*:\/\//, '');  // 协议
+  s = s.replace(/[/?#].*$/, '');                  // 路径 / 查询 / 锚点
+  s = s.replace(/:\d+$/, '');                    // 端口
+  s = s.replace(/^\*\./, '');                    // *.example.com
+  s = s.replace(/^\.+/, '');                     // 前导点
+  s = s.replace(/^www\./, '');                   // www 不区分
+  return s;
+}
+
+/** host 是否命中 site（支持子域：a.example.com 命中 example.com） */
+function hostMatches(host, site) {
+  const h = normalizeSite(host);
+  const s = normalizeSite(site);
+  if (!h || !s) return false;
+  return h === s || h.endsWith('.' + s);
+}
+
+/** 当前网站是否被设为「不翻译」 */
+function isSiteDisabled() {
+  const host = currentHost();
+  if (!host) return false;
+  const list = settings && Array.isArray(settings.disabledSites) ? settings.disabledSites : [];
+  return list.some((s) => hostMatches(host, s));
 }
 
 /* ---------------- 翻译缓存（页内 + 持久化） ---------------- */
@@ -1723,6 +1766,8 @@ function quickToggle() {
     restorePage();
     toast('已还原原文');
   } else {
+    // 手动点击始终能翻。站点禁用只作用于「自动翻译」，
+    // 因为用户主动点悬浮球本身就是明确意图，不该被拦。
     translatePage();
   }
 }
@@ -2284,8 +2329,20 @@ function openPanel() {
       <label for="ub-auto" style="margin:0">打开页面自动翻译</label>
     </div>
     <div class="ub-row">
+      <label>当前网站（只影响自动翻译）</label>
+      <div class="ub-quick">
+        <button class="ub-btn" data-act="toggle-site"></button>
+      </div>
+      <div class="ub-hint" data-site-hint></div>
+    </div>
+    <div class="ub-row">
       <label>不翻译的区域（CSS 选择器，每行一个）</label>
       <textarea data-k="excludeSelectors" placeholder=".no-translate&#10;nav.sidebar"></textarea>
+    </div>
+    <div class="ub-row">
+      <label>关闭自动翻译的网站（每行一个域名）</label>
+      <textarea data-k="disabledSites" placeholder="example.com&#10;news.ycombinator.com"></textarea>
+      <div class="ub-hint">这些网站不自动翻译，但仍可手动点击悬浮球翻译；子域名也生效</div>
     </div>
     <div class="ub-ai-group" data-ai-group hidden>
       <div class="ub-row">
@@ -2313,6 +2370,7 @@ function openPanel() {
     const k = el.getAttribute('data-k');
     if (el.type === 'checkbox') el.checked = !!settings[k];
     else if (k === 'excludeSelectors') el.value = (settings.excludeSelectors || []).join('\n');
+    else if (k === 'disabledSites') el.value = (settings.disabledSites || []).join('\n');
     else el.value = settings[k];
   });
   panel.querySelectorAll('[data-k2]').forEach((el) => {
@@ -2332,6 +2390,61 @@ function openPanel() {
   panel.querySelector('[data-act="close"]').addEventListener('click', () => mask.remove());
   panel.querySelector('[data-act="x"]').addEventListener('click', () => mask.remove());
   mask.addEventListener('click', (e) => { if (e.target === mask) mask.remove(); });
+
+  /* -------- 不翻译当前网站 -------- */
+  const siteBtn = panel.querySelector('[data-act="toggle-site"]');
+  const siteHint = panel.querySelector('[data-site-hint]');
+  const sitesArea = panel.querySelector('[data-k="disabledSites"]');
+  const host = currentHost();
+
+  /** 把文本框里的内容解析成归一化后的域名数组 */
+  const readSites = () => {
+    if (!sitesArea) return [];
+    const seen = new Set();
+    return sitesArea.value.split('\n')
+      .map(normalizeSite)
+      .filter((s) => s && !seen.has(s) && (seen.add(s), true));
+  };
+
+  /** 把域名数组写回文本框 */
+  const writeSites = (arr) => { if (sitesArea) sitesArea.value = arr.join('\n'); };
+
+  const syncSiteBtn = () => {
+    if (!siteBtn) return;
+    const sites = readSites();
+    const on = !!host && sites.some((s) => hostMatches(host, s));
+    siteBtn.textContent = on ? '已关闭自动翻译（点击恢复）' : '关闭本站自动翻译';
+    siteBtn.classList.toggle('ub-primary', on);
+    siteBtn.disabled = !host;
+    if (siteHint) {
+      siteHint.textContent = host
+        ? (on ? `当前网站 ${host} 不会自动翻译，手动点击仍可翻` : `当前网站：${host}`)
+        : '当前环境拿不到域名（本地文件等）';
+    }
+  };
+
+  if (siteBtn) {
+    siteBtn.addEventListener('click', () => {
+      if (!host) return;
+      const sites = readSites();
+      const idx = sites.findIndex((s) => hostMatches(host, s));
+      if (idx >= 0) {
+        sites.splice(idx, 1);
+        writeSites(sites);
+        toast('已恢复翻译 ' + host);
+      } else {
+        // 用归一化后的当前域名，避免把 www. 或端口写进去
+        sites.push(normalizeSite(host));
+        writeSites(sites);
+        toast('已设为不翻译 ' + host);
+      }
+      syncSiteBtn();
+    });
+  }
+
+  // 用户手改文本框时，按钮文案跟着变
+  if (sitesArea) sitesArea.addEventListener('input', syncSiteBtn);
+  syncSiteBtn();
 
   // 快捷操作
   const quickTranslate = panel.querySelector('[data-act="translate"]');
@@ -2365,6 +2478,12 @@ function openPanel() {
       if (el.type === 'checkbox') settings[k] = el.checked;
       else if (k === 'excludeSelectors') {
         settings[k] = el.value.split('\n').map((s) => s.trim()).filter(Boolean);
+      } else if (k === 'disabledSites') {
+        // 归一化 + 去重，避免用户手写 https:// 或重复行
+        const seen = new Set();
+        settings[k] = el.value.split('\n')
+          .map(normalizeSite)
+          .filter((s) => s && !seen.has(s) && (seen.add(s), true));
       } else settings[k] = el.value;
     });
     panel.querySelectorAll('[data-k2]').forEach((el) => {
@@ -2379,7 +2498,14 @@ function openPanel() {
     }
     applySettings();
     pulseBall(true);   // 悬浮球同步给一个可见的动效
-    toast('设置已保存');
+
+    // 站点禁用只影响「以后是否自动翻译」，不动当前页面内容：
+    // 用户手动翻出来的译文不应该因为保存设置就被抹掉。
+    if (isSiteDisabled()) {
+      toast('设置已保存：' + currentHost() + ' 不再自动翻译（仍可手动点击翻译）');
+    } else {
+      toast('设置已保存');
+    }
 
     setTimeout(() => {
       mask.remove();
@@ -2442,7 +2568,7 @@ function init() {
   step('段落提示', updateParaHint);
 
   // 页面语言已是目标语言就不自动翻
-  if (shouldAutoTranslate()) {
+  if (shouldAutoTranslate() && !isSiteDisabled()) {
     const htmlLang = (document.documentElement.lang || '').toLowerCase();
     if (!(settings.targetLang.startsWith('zh') && htmlLang.startsWith('zh'))) {
       setTimeout(() => { translatePage().catch(() => undefined); }, 600);
