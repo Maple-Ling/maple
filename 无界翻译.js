@@ -1042,7 +1042,68 @@ function renderAll(pairs) {
   }
 }
 
+/* ---------------- 内容就绪检测 ----------------
+ * 自动翻译 / 手动翻译都可能遇到「页面框架出来了但正文还没渲染」。
+ * 固定延时（如 setTimeout 600ms）只是赌运气：快站够了，慢站（接口数据没回来、
+ * 前端框架还在渲染）就会扫不到内容，然后彻底放弃。
+ * 这里改成「轮询等正文出现」：
+ * - 只要扫到了可翻文本就立即开翻
+ * - 最长等 AUTO_WAIT_MAX_MS，超时就按真实结果（没内容）收场
+ * - 中途用户取消要能立即退出
+ */
+
+const AUTO_WAIT_MAX_MS = 8000;   // 自动翻译最长等待正文的时间
+const AUTO_POLL_MS = 250;        // 轮询间隔
+
+/** 页面当前是否已经有可翻译内容（文本节点或可翻属性） */
+function hasTranslatableContent() {
+  try {
+    if (collectTextNodes(document.body || document.documentElement).length) return true;
+    if (settings.translateAttributes && collectAttrItems(document).length) return true;
+  } catch (_) { /* 扫描失败当作没内容 */ }
+  return false;
+}
+
+/**
+ * 等正文出现后再执行翻译。
+ * @param {object} opts { maxWait, poll, scope }  scope 用于取消检测
+ * @returns {Promise<boolean>} 是否成功启动了一次翻译
+ */
+async function waitForContentThenTranslate(opts) {
+  const o = opts || {};
+  const maxWait = typeof o.maxWait === 'number' ? o.maxWait : AUTO_WAIT_MAX_MS;
+  const poll = typeof o.poll === 'number' ? o.poll : AUTO_POLL_MS;
+  const scope = o.scope || null;
+  const deadline = Date.now() + maxWait;
+
+  // 已经有内容就立即开翻，不白等一轮
+  while (true) {
+    if (scope && scope.cancelled) return false;
+    if (hasTranslatableContent()) break;
+    if (Date.now() >= deadline) break;
+    await sleep(poll);
+  }
+
+  if (scope && scope.cancelled) return false;
+  await translatePage();
+  return true;
+}
+
 /* ---------------- 主流程 ---------------- */
+
+/** 手动点击翻译时，等正文出现的上限（比自动翻译短，不让用户干等） */
+const MANUAL_WAIT_MAX_MS = 3000;
+
+/** 轮询等待可翻内容出现；返回 true 表示等到了 */
+async function waitForAnyContent(scope, maxWait) {
+  const deadline = Date.now() + (typeof maxWait === 'number' ? maxWait : MANUAL_WAIT_MAX_MS);
+  while (true) {
+    if (scope && scope.cancelled) return false;
+    if (hasTranslatableContent()) return true;
+    if (Date.now() >= deadline) return false;
+    await sleep(AUTO_POLL_MS);
+  }
+}
 
 /** 单次批量提交的条数上限，控制「边翻边渲染」的粒度 */
 const RENDER_CHUNK_SIZE = 50;
@@ -1094,12 +1155,27 @@ async function translatePage() {
   state.cancelScope = scope;
 
   try {
-    const items = collectTextNodes(document.body || document.documentElement);
-    const attrCount = settings.translateAttributes ? collectAttrItems(document).length : 0;
+    let items = collectTextNodes(document.body || document.documentElement);
+    let attrCount = settings.translateAttributes ? collectAttrItems(document).length : 0;
     if (!items.length && !attrCount) {
-      setStatus('done-empty');
-      toast('没有找到需要翻译的内容');
-      return;
+      // 页面可能刚刷新出来、正文还在渲染。
+      // 不要立即放弃（用户点了翻译却提示没内容会很像 bug），短暂轮询等一等。
+      setStatus('translating');
+      const ready = await waitForAnyContent(scope, MANUAL_WAIT_MAX_MS);
+      if (!ready) {
+        setStatus('done-empty');
+        toast('没有找到需要翻译的内容');
+        return;
+      }
+      if (isCancelled()) return;
+      // 内容出现了，重新收集（不能递归调用 translatePage，会被 running 拦住）
+      items = collectTextNodes(document.body || document.documentElement);
+      attrCount = settings.translateAttributes ? collectAttrItems(document).length : 0;
+      if (!items.length && !attrCount) {
+        setStatus('done-empty');
+        toast('没有找到需要翻译的内容');
+        return;
+      }
     }
 
     // 先翻视口附近的内容，再补齐剩下的
@@ -1636,7 +1712,9 @@ function injectStyles() {
   .ub-btn:disabled { opacity: .4; cursor: not-allowed; }
   .ub-sep { height: 1px; margin: 14px 0; background: rgba(128,128,128,.2); }
   `.trim();
-  document.documentElement.appendChild(style);
+  const host = document.head || document.documentElement;
+  if (!host) throw new Error('documentElement 尚未就绪');
+  host.appendChild(style);
 }
 
 /* ---------------- 主题 ---------------- */
@@ -1723,6 +1801,7 @@ function createBall() {
   ballEl.style.right = saved.right + 'px';
   ballEl.style.bottom = saved.bottom + 'px';
 
+  if (!document.documentElement) throw new Error('documentElement 尚未就绪');
   document.documentElement.appendChild(ballEl);
   makeDraggable(ballEl);
 
@@ -1747,6 +1826,9 @@ function createBall() {
 
 /** 左键点悬浮球：没翻就整页翻译，翻过就还原，翻译中就取消 */
 function quickToggle() {
+  // 用户主动操作了，就不再需要自动翻译兵底
+  if (typeof cancelScheduledAutoTranslate === 'function') cancelScheduledAutoTranslate();
+
   // 翻译中再点 → 取消（这是用户最自然的预期）
   if (state.running) {
     cancelTranslate();
@@ -2521,6 +2603,7 @@ function openPanel() {
 }
 
 function applySettings() {
+  if (!document.documentElement) throw new Error('documentElement 尚未就绪');
   document.documentElement.style.setProperty('--ub-accent', settings.accent || '#4f8cff');
   if (settings.floatingBall) createBall();
   else if (ballEl) { ballEl.style.display = 'none'; }
@@ -2553,27 +2636,47 @@ function shouldAutoTranslate() {
 }
 
 function init() {
-  settings = loadSettings();
+  // 设置加载失败也要能跑：拿不到配置就用默认值，不能因此整个脚本罢工
+  try {
+    settings = loadSettings();
+  } catch (err) {
+    console.error('[无界翻译] 读取设置失败，改用默认值', err);
+    settings = deepMerge(DEFAULT_SETTINGS, {});
+  }
+  if (!settings) settings = deepMerge(DEFAULT_SETTINGS, {});
 
   // 各步骤独立保护：任何一步失败都不该让整个脚本罢工
   const step = (name, fn) => {
-    try { fn(); } catch (err) { console.error('[无界翻译] 初始化步骤失败：' + name, err); }
+    try { fn(); return true; } catch (err) {
+      console.error('[无界翻译] 初始化步骤失败：' + name, err);
+      return false;
+    }
   };
 
   step('样式', injectStyles);
-  step('应用设置', applySettings);
+  // 悬浮球是关键 UI：它建不出来（比如 documentElement 还没就绪）
+  // 就不算初始化成功，交给外层重试
+  const ballOk = step('应用设置', applySettings);
   step('快捷键', bindShortcuts);
   step('划词翻译', bindSelectionTranslate);
   step('段落模式', bindParagraphMode);
   step('段落提示', updateParaHint);
 
-  // 页面语言已是目标语言就不自动翻
+  // 自动翻译：不等 DOMContentLoaded，也不赌固定延时。
+  // 立即开一个「等正文出现」的监听，内容一渲染出来就开翻。
   if (shouldAutoTranslate() && !isSiteDisabled()) {
     const htmlLang = (document.documentElement.lang || '').toLowerCase();
     if (!(settings.targetLang.startsWith('zh') && htmlLang.startsWith('zh'))) {
-      setTimeout(() => { translatePage().catch(() => undefined); }, 600);
+      scheduleAutoTranslate();
     }
   }
+
+  if (!ballOk) {
+    // 关键步骤失败：不标记已初始化，让 boot() 的重试机制接手
+    throw new Error('悬浮球未能创建，documentElement 可能尚未就绪');
+  }
+
+  markInited();
 }
 
 /** 段落模式开启时，让可点击的文字有轻微的手型提示 */
@@ -2593,10 +2696,117 @@ function updateParaHint() {
   }
 }
 
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', init, { once: true });
-} else {
-  init();
+/* ---------------- 启动 ----------------
+ * 关键：不要等 DOMContentLoaded。
+ * 页面因为某个阻塞资源（图片、广告、卡住的接口）会长时间停在 readyState='loading'，
+ * 但浏览器早已把 HTML 渐进渲染出来了。此时如果还在等 DOMContentLoaded，
+ * 用户看到的就是「页面出来了，但没图标、也不能翻译」。
+ * 悬浮球 / 样式 / 快捷键都只挂在 documentElement 上，不依赖 body，
+ * 所以可以立即初始化；body 就绪后再补一次 body 相关的步骤。
+ */
+
+let ubInited = false;
+function markInited() { ubInited = true; }
+
+/** 立即初始化，失败时重试 */
+function boot() {
+  try {
+    init();
+  } catch (err) {
+    console.error('[无界翻译] 初始化失败，将重试', err);
+    setTimeout(boot, 300);
+  }
 }
+
+/** body 相关步骤（段落模式的 cursor 提示需要 body） */
+function onBodyReady() {
+  try { updateParaHint(); } catch (_) { /* 忽略 */ }
+}
+
+/* ---------------- 自动翻译调度 ----------------
+ * 目标：页面一刷出内容就开始翻，不等完全加载。
+ * 做法：不等 DOMContentLoaded，而是监听 DOM 变化 + 轮询，
+ * 一旦发现可翻内容就立即开翻，避免固定延时在快站白等、在慢站失效。
+ */
+
+let autoTranslateScheduled = false;
+let autoTranslateObserver = null;
+let autoTranslateTimer = null;
+
+function cancelScheduledAutoTranslate() {
+  autoTranslateScheduled = false;
+  if (autoTranslateObserver) {
+    try { autoTranslateObserver.disconnect(); } catch (_) { /* 忽略 */ }
+    autoTranslateObserver = null;
+  }
+  if (autoTranslateTimer) { clearTimeout(autoTranslateTimer); autoTranslateTimer = null; }
+}
+
+function scheduleAutoTranslate() {
+  if (autoTranslateScheduled) return;
+  autoTranslateScheduled = true;
+
+  const fire = () => {
+    if (!autoTranslateScheduled) return;
+    if (state.running || state.translated) { cancelScheduledAutoTranslate(); return; }
+    if (isSiteDisabled()) { cancelScheduledAutoTranslate(); return; }
+    if (!hasTranslatableContent()) return false;
+    cancelScheduledAutoTranslate();
+    translatePage().catch(() => undefined);
+    return true;
+  };
+
+  // 1. 立即试一次：快站此时已经有正文了
+  if (fire()) return;
+
+  // 2. 监听 DOM：正文一插入就开翻（覆盖前端框架异步渲染）
+  if (typeof MutationObserver !== 'undefined') {
+    const root = document.body || document.documentElement;
+    if (root) {
+      try {
+        autoTranslateObserver = new MutationObserver(() => {
+          if (!autoTranslateScheduled) return;
+          // 避免每个节点变动都全量扫描，节流一下
+          if (autoTranslateTimer) return;
+          autoTranslateTimer = setTimeout(() => {
+            autoTranslateTimer = null;
+            fire();
+          }, 120);
+        });
+        autoTranslateObserver.observe(root, { childList: true, subtree: true, characterData: true });
+      } catch (_) { autoTranslateObserver = null; }
+    }
+  }
+
+  // 3. 兵底轮询：某些页面 DOM 变化很碎（或 MutationObserver 不可用）
+  const deadline = Date.now() + 8000;
+  const poll = () => {
+    if (!autoTranslateScheduled) return;
+    if (fire()) return;
+    if (Date.now() >= deadline) { cancelScheduledAutoTranslate(); return; }
+    autoTranslateTimer = setTimeout(poll, 300);
+  };
+  if (!autoTranslateTimer) autoTranslateTimer = setTimeout(poll, 300);
+}
+
+// __UB_AUTOSTART__ 以下是自动启动代码；测试脚本按这个标记截断
+
+// 1. 立即启动，不等任何事件（页面卡在 loading 时也能出图标）
+boot();
+
+// 2. body 就绪后补一次依赖 body 的步骤
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', onBodyReady, { once: true });
+} else {
+  onBodyReady();
+}
+
+// 3. 兜底：万一首次初始化没成功，2 秒后再试一次
+setTimeout(() => {
+  if (!ubInited) {
+    console.warn('[无界翻译] 首次初始化未完成，重试');
+    boot();
+  }
+}, 2000);
 
 })();
