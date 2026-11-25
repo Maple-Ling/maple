@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         通用录制·回放助手 (Recorder & Replayer)
+// @name         无界油猴录制·回放助手 (Recorder & Replayer)
 // @namespace    https://pi.local/userscript
 // @version      1.0.0
 // @description  长按浮动按钮打开菜单：录制页面点击/输入/滚动，按录制时的真实间隔回放，支持定时循环执行。适配手机与电脑 UI。
